@@ -1,0 +1,9 @@
+# This file is machine-generated - editing it directly is not advised
+
+julia_version = "1.7.1"
+manifest_format = "2.0"
+
+[[deps.DICOM]]
+git-tree-sha1 = "cc8a841f37cbc2fcb5257eb13bd8039dc1ec75a2"
+uuid = "a26e6606-dd52-5f6a-a97f-4f611373d757"
+version = "0.10.1"
