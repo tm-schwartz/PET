@@ -1,0 +1,17 @@
+name = "FdgPet"
+uuid = "6c748940-0faa-4da0-9c80-a2e38384b490"
+authors = ["tm-schwartz <tm.sc@protonmail.com> and contributors"]
+version = "1.0.0-DEV"
+
+[deps]
+DICOM = "a26e6606-dd52-5f6a-a97f-4f611373d757"
+Revise = "295af30f-e4ad-537b-8983-00126c2a3abe"
+
+[compat]
+julia = "1.7"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+
+[targets]
+test = ["Test"]
