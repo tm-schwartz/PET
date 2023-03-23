@@ -1,6 +1,7 @@
 module FdgPet
 export process_data_dir
 using DICOM
+using Distributed
 
 function peek_tag(dicom_path, tag)
     dcm = dcm_parse(dicom_path)
@@ -21,9 +22,9 @@ function dcm_fix_name(dir)
         has_imin = occursin(r"imin-\d{3}", dicom)
         imin = peek_tag(dicom, "ImageIndex")
         if (has_imin == false) & (isempty(ext) || ext ≠ ".dcm")
-            updated_fn = updated_fn * "-" * (ismissing(imin) ? "001" : string(imin)) * ".dcm"
+            updated_fn = updated_fn * "-" * (ismissing(imin) ? "1" : string(imin)) * ".dcm"
         elseif (has_imin == false) & (ext == ".dcm")
-            updated_fn = splitext(updated_fn)[1] * "-" * (ismissing(imin) ? "001" : string(imin)) * ext
+            updated_fn = splitext(updated_fn)[1] * "-" * (ismissing(imin) ? "1" : string(imin)) * ext
         elseif has_imin & (ext ≠ ".dcm")
             updated_fn *= ".dcm"
         end
@@ -60,6 +61,25 @@ function dcm2niix(input_dir)
     display(output)
 end 
 
+function _med2image(input_path)
+    series_name = (last ∘ splitpath ∘ dirname)(input_path)
+    command = `sh -c "source /Users/schwartz/defaultv/bin/activate; med2image -i $input_path -d nifti-results \
+    -o $series_name \
+    --outputFileType jpg --sliceToConvert m ;"`
+    output = string(readlines(Cmd(command))...)
+    display(output)
+end
+function med2image(data_dir, exclude = r"mip|legs|nac|screen|ds\_store"i)
+    start_file_list = []
+    studypaths = filter(isdir, readdir(data_dir, join=true))
+    seriespaths = filter(fn->!occursin(exclude, fn), filter(isdir, append!(map(sp->readdir(sp, join=true), studypaths)...)))
+    niftipaths = append!(map(seriespaths) do sp
+        return filter(np->occursin(r"\.nii\.gz$", np), readdir(sp, join=true))
+    end...)
+    cleaned_niftis = filter(np->!occursin(exclude, np), niftipaths)
+    Distributed.pmap(_med2image, cleaned_niftis)
+end
+
 function process_data_dir(data_dir)
     contents = readdir(data_dir)
     studies = filter(d -> isdir(joinpath(data_dir, d)), contents)
@@ -82,13 +102,17 @@ function process_data_dir(data_dir)
             
             end
             dcm_fix_name(absolute_seriespath)
+            dcm2niix(absolute_seriespath)
         end
     end
+    med2image(data_dir)
 end
 
 
 end # module
-
+# TODO run from beginning then try on accre
+data_dir = "/Users/schwartz/FDG_PET/2156974"
+FdgPet.med2image(data_dir)
 
 # med2image -i 1.2.840.113619.2.80.45947970.24763.1190911157.146.4.4_Reformatted/PT.1.2.840.113619.2.80.45947970.24763.1190911157.147-1.dcm
 # -d dicom-results/middle-slice -o sample --outputFileType jpg --sliceToConvert m --verbosity 3 --convertOnlySingleDICOM
