@@ -4,20 +4,16 @@ authors = ["tm-schwartz <tm.sc@protonmail.com> and contributors"]
 version = "1.0.0-DEV"
 
 [deps]
-AxisArrays = "39de3d68-74b9-583c-8d2d-e117c070f3a9"
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
 DICOM = "a26e6606-dd52-5f6a-a97f-4f611373d757"
-FileIO = "5789e2e9-d7fb-5bc7-8068-2c6fae9b9549"
-Gaston = "4b11ee91-296f-5714-9832-002c20994614"
-ImageView = "86fae568-95e7-573e-a6b2-d8a6b900c9ef"
-Images = "916415d5-f1e6-5110-898d-aaa5f9f070e0"
+Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
+JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
 Makie = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
 NIfTI = "a3a9e032-41b5-5fc4-967a-a6b7a19844d3"
-Revise = "295af30f-e4ad-537b-8983-00126c2a3abe"
-Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
+UUIDs = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
 
 [compat]
-julia = "1.7"
+julia = "1.9"
 
 [extras]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
