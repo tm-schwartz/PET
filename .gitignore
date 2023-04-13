@@ -1,0 +1,6 @@
+*/Manifest.toml
+git_ignore/
+__pycache__
+.vscode
+*/.githubs
+FdgPet/src/Bids.jl
