@@ -7,7 +7,7 @@ using UUIDs
 using JSON3
 using Makie, CairoMakie
 
-const excluded = r"mip|leg[s]?|nac|screen|ds\_store|fused|statistic[s]?"i
+const excluded = r"^((?!vumcct).)*$|mip|leg[s]?|nac|screen|ds\_store|fused|statistic[s]?"i
 
 subfiles = startswith("sub-")
 exclude(input::Vector{String}) = filter(fn -> !occursin(excluded, fn), input)
@@ -46,7 +46,7 @@ function dcm_fix_name(dir)
     end
 end
 
-function process_descriptor(descriptor::String)
+function process_descriptor(descriptor::AbstractString)
     re = r"((?<=\W)|^)(\w{1,})(?=\W?)"
     matches = findall(re, descriptor)
     return join([descriptor[m] for m in matches], "_")
@@ -64,7 +64,12 @@ function dcm_dir_to_series(dir)
         dcm = dcm_parse(dicom)
         seriesdescr = replace(dcm[tag"SeriesDescription"], " " => "_", r"\W" => "")
         imagetype = process_descriptor(dcm[tag"ImageType"])
-        seriesdata = join([seriesdescr, imagetype], "_")
+        if :StationName in propertynames(dcm)
+            stationname = process_descriptor(dcm[tag"StationName"])
+        else
+            stationname = "NONE"
+        end
+        seriesdata = join([seriesdescr, imagetype, stationname], "_")
         series_path = joinpath(dir, seriesdata)
         dicom_currentpath = joinpath(dir, dicom)
         if haskey(series_dict, series_path)
@@ -192,8 +197,13 @@ function process_data_dir(data_dir, bidsdir, modalityfolder, pyenv)
             end
         end
     end
-    slicepng(data_dir, img_links)
-    tobids(data_dir, bidsdir, modalityfolder)
+    niftifiles = readlines(Cmd(`find $data_dir -name 'sub*gz' -or -name 'sub*json'`))
+    if isempty(niftifiles)
+        return
+    else
+        slicepng(data_dir, img_links)
+        tobids(data_dir, bidsdir, modalityfolder)
+    end
 end
 
 end # module
