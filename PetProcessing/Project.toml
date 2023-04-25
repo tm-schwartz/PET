@@ -1,4 +1,4 @@
-name = "FdgPet"
+name = "PetProcessing"
 uuid = "6c748940-0faa-4da0-9c80-a2e38384b490"
 authors = ["tm-schwartz <tm.sc@protonmail.com> and contributors"]
 version = "1.0.0-DEV"
@@ -10,6 +10,7 @@ Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
 JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
 Makie = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
 NIfTI = "a3a9e032-41b5-5fc4-967a-a6b7a19844d3"
+Tar = "a4e569a6-e804-4fa4-b0f3-eef7a1d5b13e"
 UUIDs = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
 
 [compat]
