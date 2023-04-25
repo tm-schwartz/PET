@@ -1,5 +1,3 @@
-module FdgPet
-export process_data_dir
 using DICOM
 using NIfTI
 using Distributed
@@ -205,5 +203,3 @@ function process_data_dir(data_dir, bidsdir, modalityfolder, pyenv)
         tobids(data_dir, bidsdir, modalityfolder)
     end
 end
-
-end # module
