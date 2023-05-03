@@ -2,7 +2,7 @@ module PetProcessing
 
 export
     process_data_dir,
-    tarextractor
+    tarextract
 
 include("bids.jl")
 include("tarex.jl")
