@@ -3,5 +3,5 @@ using PackageCompiler
 function compilepackage()
     cmd = `julia --project=PetProcessing --trace-compile=pettrace.jl -e "push!(LOAD_PATH, \"PetProcessing\"); using PetProcessing; exit()"`
     run(cmd)
-    create_sysimage(["PetProcessing"]; sysimage_path="PetProcessing-img.so", precompile_statements_file="pettrace.jl")
+    create_sysimage(["PetProcessing"]; sysimage_path="PetProcessing-img.so", precompile_statements_file="pettrace.jl", cpu_target = PackageCompiler.default_app_cpu_target())
 end
