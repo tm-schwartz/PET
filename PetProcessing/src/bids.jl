@@ -15,7 +15,7 @@ exclude(input::String) = occursin(excluded, input)
 function peek_tag(dicom_path, tag)
     dcm = dcm_parse(dicom_path)
     if haskey(dcm, tag)
-        return dcm[tag"ImageIndex"]
+        return dcm[tag"ImageIndex"] # think this is a bug....
     else
         return missing
     end
@@ -49,9 +49,9 @@ function process_descriptor(descriptor::AbstractString)
     matches = findall(re, descriptor)
     return join([descriptor[m] for m in matches], "_")
 end
-
+ 
 function process_descriptor(descriptor::Vector)
-    desc = join(descriptor, "_")
+    desc = join(descriptor .|> strip, "_") # strip leading and trailing spaces
     return replace(desc, " " => "_")  # account for spaces in vector elements
 end
 
