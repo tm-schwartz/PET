@@ -5,15 +5,23 @@ version = "1.0.0-DEV"
 
 [deps]
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
+Chain = "8be319e6-bccf-4806-a6f7-6fae938471bc"
+Conda = "8f4d0f93-b110-5947-807f-2305c1781a2d"
 DICOM = "a26e6606-dd52-5f6a-a97f-4f611373d757"
+Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 DelimitedFiles = "8bb1440f-4735-579b-a4ab-409b98df4dab"
 Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
+Glob = "c27321d9-0574-5035-807b-f59d2c89b15c"
+ImageFiltering = "6a3955dd-da59-5b1f-98d4-e7296123deb5"
 JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
 Makie = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
 NIfTI = "a3a9e032-41b5-5fc4-967a-a6b7a19844d3"
 PackageCompiler = "9b87118b-4619-50d2-8e1e-99f35a4d4d9d"
+PyCall = "438e738f-606a-5dbb-bf0a-cddfbfd45ab0"
+Query = "1a8c2f83-1ff3-5112-b086-8aa67b057ba1"
 Tar = "a4e569a6-e804-4fa4-b0f3-eef7a1d5b13e"
 UUIDs = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
+ZipArchives = "49080126-0e18-4c2a-b176-c102e4b3760c"
 
 [compat]
 julia = "1.9"
