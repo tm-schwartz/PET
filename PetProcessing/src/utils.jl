@@ -6,9 +6,18 @@ using Chain
 using Glob
 using Dates
 using PyCall
+using Conda
 using NIfTI
 
 const KGTOGRAMS = 1000
+
+function initializepythonenv()
+    Conda.pip_interop(true)
+    Conda.pip("install", "simpleitk")
+    Conda.pip("install", "deepbet")
+    Conda.pip("install", "dcm2niix")
+end
+
 
 function generatejsonzippath(path)
     # mrn/studyuid/seriesdescription imagetype stationname/
@@ -74,7 +83,7 @@ function smoothvolume(inputvolume, outdir)
     outfile = joinpath(outdir, replace(bn, "pet" => "8mm_pet"))
     badgerfsl = `/data/h_vmac/vmac_imaging/fsl_v6.0.5.1.sif`
     cmd = `fslmaths $inputvolume -s 3.4 $outfile`
-    if isfile(string(badgerfsl))
+    if isfile(replace(string(badgerfsl), "`"=>""))
         run(`singularity exec $badgerfsl $cmd`)
     else
         run(cmd)
@@ -125,7 +134,7 @@ function robustfov(inputvolume, outdir)
     else
         badgerfsl = `/data/h_vmac/vmac_imaging/fsl_v6.0.5.1.sif`
         cmd = `robustfov -i $inputvolume -r $outfile`
-        if isfile(string(badgerfsl))
+        if isfile(replace(string(badgerfsl), "`"=>""))
             run(`singularity exec $badgerfsl $cmd`)
         else
             run(cmd)
