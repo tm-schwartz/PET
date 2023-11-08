@@ -23,9 +23,9 @@ try
     croppedvol = robustfov(inputvolume, subderivatives)
     # cropped_pet.nii.gz is input to skullstrip
     strippedvol = skullstrip(croppedvol, subderivatives, "intermediatereg" => "stripped")
-    intermediatepet = register(joinpath(templates, "stripped_MNI152_PET_1mm.nii"), strippedvol, subderivatives, "cropped" => "intermediatereg")
+    intermediatepet = register(joinpath(templates, "stripped_MNI152_PET_1mm.nii"), strippedvol, subderivatives, "stripped" => "intermediatereg")
 
-    registeredpet = register(joinpath(templates, "stripped_MNI152_T1_1mm_Brain.nii.gz"), intermediatepet, subderivatives, "stripped" => "mni152")
+    registeredpet = register(joinpath(templates, "stripped_MNI152_T1_1mm_Brain.nii.gz"), intermediatepet, subderivatives, "intermediatereg" => "mni152")
 
     smoothedvol = smoothvolume(registeredpet, subderivatives)
 
