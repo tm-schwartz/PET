@@ -2,15 +2,12 @@ include("utils.jl")
 
 # robustfov -> skullstrip -> register
 
-inputvolume, derivatives = abspath.(ARGS)
+inputvolume, derivatives, templates = abspath.(ARGS)
 
 if occursin(r"fusion"i, inputvolume)
     println("Not processing fusion $inputvolume")
     exit()
 end
-
-
-mnitemplates = joinpath(dirname(derivatives), "mnitemplates")
 
 sidecar = replace(inputvolume, "nii.gz" => "json")
 
@@ -24,18 +21,22 @@ end
 
 try
     croppedvol = robustfov(inputvolume, subderivatives)
-    intermediatepet = register(joinpath(mnitemplates, "MNI152_PET_1MM.nii"), croppedvol, subderivatives, "cropped" => "intermediatereg")
+    intermediatepet = register(joinpath(templates, "MNI152_PET_1mm.nii"), croppedvol, subderivatives, "cropped" => "intermediatereg")
     # cropped_pet.nii.gz is input to skullstrip
     strippedvol = skullstrip(intermediatepet, subderivatives, "intermediatereg" => "stripped")
 
-    registeredpet = register(joinpath(mnitemplates, "MNI152_T1_1mm_Brain.nii.gz"), strippedvol, subderivatives, "stripped" => "mni152")
+    registeredpet = register(joinpath(templates, "MNI152_T1_1mm_Brain.nii.gz"), strippedvol, subderivatives, "stripped" => "mni152")
 
     smoothedvol = smoothvolume(registeredpet, subderivatives)
 
     suvscalefactor = getsuvbwscalefactor(sidecar)
 
     suvvolume = computesuvvolume(smoothedvol, suvscalefactor, "pet" => "suv_pet")
-
+    rm(croppedvol)
+    rm(intermediatepet)
+    rm(strippedvol)
+    rm(registeredpet)
+    rm(smoothedvol)
     println(suvvolume)
 
 catch e
