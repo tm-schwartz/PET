@@ -8,7 +8,9 @@ using Dates
 using PyCall
 using Conda
 using NIfTI
-
+using Statistics: mean
+using DataFrames
+using CSV
 const KGTOGRAMS = 1000
 
 function initializepythonenv()
@@ -78,11 +80,39 @@ function editjsonsidecar(skipexistingkeys=false)
     return "Added all keys to sidecar:$sidecar"
 end
 
-function smoothvolume(inputvolume, outdir)
+function resamplepixdims(inputvolume, outdir, suffix)
+    #from fsl.data import image
+    #from fsl.utils.image import resample
+    fslimage = pyimport("fsl.data.image")
+    fslresample = pyimport("fsl.utils.image.resample")
+    i = fslimage.Image(inputvolume)
+    o = fslresample.resampleToPixdims(i, [1,1,1])
+    ni = NIVolume(first(o))
+    setaffine(ni.header, last(o))
+    bn = @chain inputvolume basename replace(_, suffix)
+    outfile = joinpath(outdir, bn)
+    niwrite(outfile, ni)
+    return outfile
+end
+
+function resampletoref(inputvolume, lname, reference)
+        fslresample = pyimport("fsl.utils.image.resample")
+        fslimage = pyimport("fsl.data.image")
+        nib = pyimport("nibabel")
+        o = fslresample.resampleToReference(inputvolume, fslimage.Image(reference))
+        vol = nib.Nifti1Image(o...)
+        nib.save(vol, joinpath(dirname(reference), lname * "-mask.nii.gz"))
+        # ni = NIVolume(first(o))
+        # setaffine(ni.header, last(o))
+        # return ni
+    end
+
+function smoothvolume(inputvolume, outdir; σ=3.4)
     bn = basename(inputvolume)
     outfile = joinpath(outdir, replace(bn, "pet" => "8mm_pet"))
     badgerfsl = `/data/h_vmac/vmac_imaging/fsl_v6.0.5.1.sif`
-    cmd = `fslmaths $inputvolume -s 3.4 $outfile`
+    # cmd = `fslmaths $inputvolume -s 3.4 $outfile`
+    cmd = `fslmaths $inputvolume -s $σ $outfile`
     if isfile(replace(string(badgerfsl), "`"=>""))
         run(`singularity exec $badgerfsl $cmd`)
     else
@@ -93,8 +123,7 @@ end
 
 function getsuvbwscalefactor(sidecarpath)
     json = (JSON3.read ∘ read)(sidecarpath)
-    suvbwscalefactor = let
-        seriestime = Time(json.SeriesTime, dateformat"HHMMSS")
+    suvbwscalefactor = let        seriestime = Time(json.SeriesTime, dateformat"HHMMSS")
         radiopharmaceuticalstarttime = Time(split(json.RadiopharmaceuticalStartTime, '.') |> first, dateformat"HHMMSS")
         halflife = Second(floor(json.RadionuclideHalfLife))
         injecteddosebq = json.RadionuclideTotalDose
@@ -148,108 +177,81 @@ function skullstrip(inputvolume, outdir, suffix)
     outfile = joinpath(outdir, replace(bn, suffix))
     tivpath = joinpath(outdir, replace(outfile, "nii.gz" => "TIV.csv"))
     deepbet = pyimport("deepbet")
-    deepbet.run_bet(PyObject([inputvolume]), PyObject([outfile]), tiv_paths=PyObject([tivpath]), threshold=0.9, n_dilate=-2, no_gpu=true)
+    deepbet.run_bet([inputvolume], [outfile], tiv_paths=[tivpath], threshold=0.9, n_dilate=-2, no_gpu=true)
     return outfile
 end
 
-py"""
-import SimpleITK as sitk
-
-
-def register(
-    fixed_image_path, moving_image_path, final_moving_image, final_transform_path
-):
-    fixed_image = sitk.ReadImage(fixed_image_path, sitk.sitkFloat32)
-    moving_image = sitk.ReadImage(moving_image_path, sitk.sitkFloat32)
-
-    initial_transform = sitk.CenteredTransformInitializer(
-        fixed_image,
-        moving_image,
-        sitk.Euler3DTransform(),
-        sitk.CenteredTransformInitializerFilter.GEOMETRY,
-    )
-
-    registration_method = sitk.ImageRegistrationMethod()
-
-    # Similarity metric settings.
-    registration_method.SetMetricAsMattesMutualInformation(numberOfHistogramBins=50)
-    registration_method.SetMetricSamplingStrategy(registration_method.RANDOM)
-    registration_method.SetMetricSamplingPercentage(0.01)
-
-    registration_method.SetInterpolator(sitk.sitkLinear)
-
-    # Optimizer settings.
-    registration_method.SetOptimizerAsGradientDescent(
-        learningRate=1.0,
-        numberOfIterations=100,
-        convergenceMinimumValue=1e-6,
-        convergenceWindowSize=10,
-    )
-    registration_method.SetOptimizerScalesFromPhysicalShift()
-
-    # Setup for the multi-resolution framework.
-    registration_method.SetShrinkFactorsPerLevel(shrinkFactors=[4, 2, 1])
-    registration_method.SetSmoothingSigmasPerLevel(smoothingSigmas=[2, 1, 0])
-    registration_method.SmoothingSigmasAreSpecifiedInPhysicalUnitsOn()
-
-    registration_method.SetInitialTransform(initial_transform)
-
-    final_transform = registration_method.Execute(
-        sitk.Cast(fixed_image, sitk.sitkFloat32),
-        sitk.Cast(moving_image, sitk.sitkFloat32),
-    )
-    if final_transform_path != None:
-        sitk.WriteTransform(final_transform, final_transform_path)
-    resampled_moving = sitk.Resample(
-        moving_image,
-        fixed_image,
-        final_transform,
-        sitk.sitkLinear,
-        0.0,
-        moving_image.GetPixelID(),
-    )
-
-    sitk.WriteImage(resampled_moving, final_moving_image)
-
-
-def resample_moving(
-    fixed_image_path, moving_image_path, final_moving_image, resample_with_transform
-):
-    fixed_image = sitk.ReadImage(fixed_image_path, sitk.sitkFloat32)
-    moving_image = sitk.ReadImage(moving_image_path, sitk.sitkFloat32)
-    transform = sitk.ReadTransform(resample_with_transform)
-    # apply transform
-    resampled_moving = sitk.Resample(
-        moving_image,
-        fixed_image,
-        transform,
-        sitk.sitkLinear,
-        0.0,
-        moving_image.GetPixelID(),
-    )
-
-    sitk.WriteImage(resampled_moving, final_moving_image)
-"""
-
-function register(fixedvolumepath, movingvolumepath, outdir, suffix, tfm=false)
+function rigidregistration(fixedvolumepath, movingvolumepath, outdir, suffix)
     bn = basename(movingvolumepath)
-    finalmovingvolumepath = joinpath(outdir, replace(bn, suffix))
-    if tfm
-        finaltransformpath = joinpath(outdir, replace(finalmovingvolumepath, "nii.gz" => "tfm"))
-        py"register"(fixedvolumepath, movingvolumepath, finalmovingvolumepath, finaltransformpath)
-    else
-        py"register"(fixedvolumepath, movingvolumepath, finalmovingvolumepath, PyObject(nothing))
-    end
-    setsformqform(finalmovingvolumepath)
-    return finalmovingvolumepath
+    finalmovingvolumepath = replace(bn, suffix)
+    dipy_align_affine = joinpath(Conda.BINDIR, "dipy_align_affine")
+    out_dir = joinpath(outdir, "affine")
+    run(`$dipy_align_affine $fixedvolumepath $movingvolumepath --transform "affine" --out_dir $out_dir --out_moved $finalmovingvolumepath --progressive`)
+    return joinpath(out_dir, finalmovingvolumepath)
 end
 
-function resample(fixedvolumepath, movingvolumepath, outdir, suffix)
+"""
+see https://github.com/InsightSoftwareConsortium/ITKElastix/tree/main/examples for itk examples. could probably replace
+dipy in `rigidregistration` with itk. Maybe example-18 MONAI_affine_elastix_nonlinear or just equivalent 
+"center of mass, translation, rigid body and full affine registration" as performed by dipy_align_affine --progressive
+"""
+function elastixregistration(fixedvolumepath, movingvolumepath, outdir, suffix)
     bn = basename(movingvolumepath)
-    finalmovingvolumepath = joinpath(outdir, replace(bn, suffix))
-    resamplewithtransform = joinpath(outdir, replace(bn, "nii.gz" => "tfm"))
-    py"resample_moving"(fixedvolumepath, movingvolumepath, finalmovingvolumepath, resamplewithtransform)
-    setsformqform(finalmovingvolumepath)
+    finalmovingvolume = joinpath(outdir, replace(bn, suffix))
+    itk_meta_dir = joinpath(outdir, "elastix_data")
+    if !isdir(itk_meta_dir)
+        mkpath(itk_meta_dir)
+    end
+    itk = pyimport("itk")
+    # Load images with itk floats (itk.F). Necessary for elastix
+    fixed_image = itk.imread(fixedvolumepath, itk.F)
+
+    moving_image = itk.imread(movingvolumepath, itk.F)
+
+    result_image, result_transform_parameters = itk.elastix_registration_method(fixed_image, moving_image, output_directory=itk_meta_dir, log_file_name="elastix.log")
+
+    itk.imwrite(result_image, finalmovingvolume)
+    # result_transform_parameters.WriteParameterFile(
+    #     parameter_map_custom, 'exampleoutput/parameters_custom.txt')
+    setsformqform(finalmovingvolume)
+    return finalmovingvolume
+end    
+
+function generatemasks(refimg, atlases=["mni", "harvardoxford-subcortical"])
+    fslatlases = pyimport("fsl.data.atlases")
+    fslatlases.rescanAtlases()
+    t = [fslatlases.hasAtlas(atlas) for atlas in atlases]
+    if !all(t)
+        error("Cannot find atlas: $(atlases[t])")
+    end
+    labelatlases = [fslatlases.LabelAtlas(fslatlases.getAtlasDescription(at), 1.0) for at in atlases]
+    for lat in labelatlases
+        for label in lat.desc.labels
+            lname = replace(label.name, " "=>"_") * "_" * lat.desc.atlasID
+            resampletoref(lat.get(label), lname, refimg)
+            #m = niread(joinpath(templatedir, lname * "-mask.nii.gz"))
+            #debugmask = (voxel -> voxel == 0.0 ? 0.0 : 1.0).(m)
+            #niwrite(joinpath(,label.name * ".nii"), NIVolume(m.header, m.extensions, debugmask))
+        end
+    end
+end
+
+function getmeans(suvimgpath, templatedir)
+    roimasks = glob("*mask.nii.gz", templatedir)
+    suvimg = niread(suvimgpath)
+    mrn = match(r"(?<=sub-)(\d{7,})", suvimgpath).match
+    nroi = length(roimasks)
+    rowdata = Array{NamedTuple{(:mrn, :label, :mean), Tuple{String, String, Float16}}}(undef, nroi)
+    for roi in 1:nroi
+        maskfile = roimasks[roi]
+        label = @chain maskfile basename replace(_, ".nii.gz"=>"", " "=>"_", "-mask"=>"", "harvardoxford"=>"harvox", "cortical"=>"cort")
+        masknii = niread(maskfile)
+        mask = (voxel -> voxel == 1.0 ? voxel : missing).(masknii)
+        meanval = (mean∘skipmissing)(suvimg .* mask)
+        rowdata[roi] = (; mrn, label, mean=meanval)
+    end
+    df = DataFrame(vcat(rowdata))
+    CSV.write(joinpath(dirname(suvimgpath), "$mrn-mean-suv.csv"), unstack(df, :label, :mean))
 end
 
 

@@ -13,6 +13,8 @@ sidecar = replace(inputvolume, "nii.gz" => "json")
 
 subject = split(inputvolume |> basename, "_") |> first
 
+suvscalefactor = getsuvbwscalefactor(sidecar)
+
 subderivatives = joinpath(derivatives, subject)
 
 if !isdir(subderivatives)
@@ -21,28 +23,32 @@ end
 
 try
     croppedvol = robustfov(inputvolume, subderivatives)
-    # cropped_pet.nii.gz is input to skullstrip
-    strippedvol = skullstrip(croppedvol, subderivatives, "intermediatereg" => "stripped")
-    intermediatepet = register(joinpath(templates, "stripped_MNI152_PET_1mm.nii"), strippedvol, subderivatives, "stripped" => "intermediatereg")
+    resampled = resamplepixdims(croppedvol, subderivatives, "cropped"=>"resampled")
+    affinereg = rigidregistration(joinpath(templates,  "MNI152_PET_1mm_coreg_smoothed.nii.gz"), resampled, subderivatives, "resampled" => "affine")
 
-    registeredpet = register(joinpath(templates, "stripped_MNI152_T1_1mm_Brain.nii.gz"), intermediatepet, subderivatives, "intermediatereg" => "mni152")
+    strippedvol = skullstrip(affinereg, subderivatives, "affine" => "stripped")
 
-    smoothedvol = smoothvolume(registeredpet, subderivatives)
+    registeredpet = elastixregistration(joinpath(templates, "MNI152_PET_1mm_coreg_stripped_smoothed.nii.gz"), strippedvol, subderivatives, "stripped" => "mni152")
+    
+    smoothedvol = smoothvolume(registeredpet, subderivatives; σ=2.97)
 
-    suvscalefactor = getsuvbwscalefactor(sidecar)
 
     suvvolume = computesuvvolume(smoothedvol, suvscalefactor, "pet" => "suv_pet")
-    rm(croppedvol)
-    rm(intermediatepet)
-    rm(strippedvol)
-    rm(registeredpet)
-    rm(smoothedvol)
+    
+    getmeans(suvvolume, templates)
+
+    #rm(croppedvol)
+    #rm(intermediatepet)
+    #rm(strippedvol)
+    #rm(registeredpet)
+    #rm(smoothedvol)
     println(suvvolume)
 
-catch e
+catch
     logfile = replace(basename(inputvolume), ".nii.gz"=>"_log.txt")
+    exc = current_exceptions()
     open(joinpath(subderivatives, logfile), "w") do f
-        write(f, string(e))
+        showerror(f, exc)
     end
     println("Failed on $inputvolume")
 end
