@@ -1,4 +1,3 @@
-using PackageCompiler
 using ZipArchives
 using Query
 using JSON3
@@ -86,7 +85,7 @@ function resamplepixdims(inputvolume, outdir, suffix)
     fslimage = pyimport("fsl.data.image")
     fslresample = pyimport("fsl.utils.image.resample")
     i = fslimage.Image(inputvolume)
-    o = fslresample.resampleToPixdims(i, [1,1,1])
+    o = fslresample.resampleToPixdims(i, [1, 1, 1])
     ni = NIVolume(first(o))
     setaffine(ni.header, last(o))
     bn = @chain inputvolume basename replace(_, suffix)
@@ -96,16 +95,16 @@ function resamplepixdims(inputvolume, outdir, suffix)
 end
 
 function resampletoref(inputvolume, lname, reference)
-        fslresample = pyimport("fsl.utils.image.resample")
-        fslimage = pyimport("fsl.data.image")
-        nib = pyimport("nibabel")
-        o = fslresample.resampleToReference(inputvolume, fslimage.Image(reference))
-        vol = nib.Nifti1Image(o...)
-        nib.save(vol, joinpath(dirname(reference), lname * "-mask.nii.gz"))
-        # ni = NIVolume(first(o))
-        # setaffine(ni.header, last(o))
-        # return ni
-    end
+    fslresample = pyimport("fsl.utils.image.resample")
+    fslimage = pyimport("fsl.data.image")
+    nib = pyimport("nibabel")
+    o = fslresample.resampleToReference(inputvolume, fslimage.Image(reference))
+    vol = nib.Nifti1Image(o...)
+    nib.save(vol, joinpath(dirname(reference), lname * "-mask.nii.gz"))
+    # ni = NIVolume(first(o))
+    # setaffine(ni.header, last(o))
+    # return ni
+end
 
 function smoothvolume(inputvolume, outdir; σ=3.4)
     bn = basename(inputvolume)
@@ -113,7 +112,7 @@ function smoothvolume(inputvolume, outdir; σ=3.4)
     badgerfsl = `/data/h_vmac/vmac_imaging/fsl_v6.0.5.1.sif`
     # cmd = `fslmaths $inputvolume -s 3.4 $outfile`
     cmd = `fslmaths $inputvolume -s $σ $outfile`
-    if isfile(replace(string(badgerfsl), "`"=>""))
+    if isfile(replace(string(badgerfsl), "`" => ""))
         run(`singularity exec $badgerfsl $cmd`)
     else
         run(cmd)
@@ -123,7 +122,7 @@ end
 
 function getsuvbwscalefactor(sidecarpath)
     json = (JSON3.read ∘ read)(sidecarpath)
-    suvbwscalefactor = let        seriestime = Time(json.SeriesTime, dateformat"HHMMSS")
+    suvbwscalefactor = let seriestime = Time(json.SeriesTime, dateformat"HHMMSS")
         radiopharmaceuticalstarttime = Time(split(json.RadiopharmaceuticalStartTime, '.') |> first, dateformat"HHMMSS")
         halflife = Second(floor(json.RadionuclideHalfLife))
         injecteddosebq = json.RadionuclideTotalDose
@@ -163,7 +162,7 @@ function robustfov(inputvolume, outdir)
     else
         badgerfsl = `/data/h_vmac/vmac_imaging/fsl_v6.0.5.1.sif`
         cmd = `robustfov -i $inputvolume -r $outfile`
-        if isfile(replace(string(badgerfsl), "`"=>""))
+        if isfile(replace(string(badgerfsl), "`" => ""))
             run(`singularity exec $badgerfsl $cmd`)
         else
             run(cmd)
@@ -211,11 +210,9 @@ function elastixregistration(fixedvolumepath, movingvolumepath, outdir, suffix)
     result_image, result_transform_parameters = itk.elastix_registration_method(fixed_image, moving_image, output_directory=itk_meta_dir, log_file_name="elastix.log")
 
     itk.imwrite(result_image, finalmovingvolume)
-    # result_transform_parameters.WriteParameterFile(
-    #     parameter_map_custom, 'exampleoutput/parameters_custom.txt')
     setsformqform(finalmovingvolume)
     return finalmovingvolume
-end    
+end
 
 function generatemasks(refimg, atlases=["mni", "harvardoxford-subcortical"])
     fslatlases = pyimport("fsl.data.atlases")
@@ -227,11 +224,8 @@ function generatemasks(refimg, atlases=["mni", "harvardoxford-subcortical"])
     labelatlases = [fslatlases.LabelAtlas(fslatlases.getAtlasDescription(at), 1.0) for at in atlases]
     for lat in labelatlases
         for label in lat.desc.labels
-            lname = replace(label.name, " "=>"_") * "_" * lat.desc.atlasID
+            lname = replace(label.name, " " => "_") * "_" * lat.desc.atlasID
             resampletoref(lat.get(label), lname, refimg)
-            #m = niread(joinpath(templatedir, lname * "-mask.nii.gz"))
-            #debugmask = (voxel -> voxel == 0.0 ? 0.0 : 1.0).(m)
-            #niwrite(joinpath(,label.name * ".nii"), NIVolume(m.header, m.extensions, debugmask))
         end
     end
 end
@@ -239,25 +233,17 @@ end
 function getmeans(suvimgpath, templatedir)
     roimasks = glob("*mask.nii.gz", templatedir)
     suvimg = niread(suvimgpath)
-    mrn = match(r"(?<=sub-)(\d{7,})", suvimgpath).match
+    outfile = @chain suvimgpath basename split(_, ".") first
     nroi = length(roimasks)
-    rowdata = Array{NamedTuple{(:mrn, :label, :mean), Tuple{String, String, Float16}}}(undef, nroi)
+    rowdata = Array{NamedTuple{(:mrn, :label, :mean),Tuple{String,String,Float16}}}(undef, nroi)
     for roi in 1:nroi
         maskfile = roimasks[roi]
-        label = @chain maskfile basename replace(_, ".nii.gz"=>"", " "=>"_", "-mask"=>"", "harvardoxford"=>"harvox", "cortical"=>"cort")
+        label = @chain maskfile basename replace(_, ".nii.gz" => "", " " => "_", "-mask" => "", "harvardoxford" => "harvox", "cortical" => "cort")
         masknii = niread(maskfile)
         mask = (voxel -> voxel == 1.0 ? voxel : missing).(masknii)
-        meanval = (mean∘skipmissing)(suvimg .* mask)
+        meanval = (mean ∘ skipmissing)(suvimg .* mask)
         rowdata[roi] = (; mrn, label, mean=meanval)
     end
     df = DataFrame(vcat(rowdata))
-    CSV.write(joinpath(dirname(suvimgpath), "$mrn-mean-suv.csv"), unstack(df, :label, :mean))
-end
-
-
-function compilepackage()
-    ENV["JULIA_CPU_TARGET"] = "generic;sandybridge,-xsaveopt,clone_all;haswell,-rdrnd,base(1)"
-    cmd = `julia --project=PetProcessing --trace-compile=pettrace.jl -e "push!(LOAD_PATH, \"PetProcessing\"); using PetProcessing; exit()"`
-    run(cmd)
-    create_sysimage(["PetProcessing"]; sysimage_path="PetProcessing-img.so", precompile_statements_file="pettrace.jl")
+    CSV.write(joinpath(dirname(suvimgpath), "$outfile-mean-suv.csv"), unstack(df, :label, :mean))
 end
