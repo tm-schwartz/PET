@@ -1,0 +1,20 @@
+[tool.poetry]
+name = "registration"
+version = "0.1.0"
+description = ""
+authors = ["tm-schwartz <tm.sc@protonmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+dipy = "^1.7.0"
+deepbet = "^0.0.2"
+nibabel = "^5.1.0"
+fslpy = "^3.15.2"
+numba = "^0.58.1"
+itk-elastix = "0.19"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
