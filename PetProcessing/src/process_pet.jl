@@ -13,6 +13,8 @@ sidecar = replace(inputvolume, "nii.gz" => "json")
 
 subject = split(inputvolume |> basename, "_") |> first
 
+zipname = sidecar |> basename |> splitext |> first 
+
 suvscalefactor = getsuvbwscalefactor(sidecar)
 
 subderivatives = joinpath(derivatives, subject)
@@ -42,7 +44,8 @@ try
     #rm(strippedvol)
     #rm(registeredpet)
     #rm(smoothedvol)
-    println(suvvolume)
+    run(`zip -9rTm $(joinpath(subderivatives, "$zipname-intermediatefiles.zip")) $subderivatives -x \*.csv \*suv_pet.nii.gz `)
+    #println(suvvolume)
 
 catch
     logfile = replace(basename(inputvolume), ".nii.gz" => "_log.txt")
