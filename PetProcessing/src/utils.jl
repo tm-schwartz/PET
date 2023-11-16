@@ -234,6 +234,7 @@ function getmeans(suvimgpath, templatedir)
     roimasks = glob("*mask.nii.gz", templatedir)
     suvimg = niread(suvimgpath)
     outfile = @chain suvimgpath basename split(_, ".") first
+    mrn = match(r"(?<=sub-)(\d{7,})", suvimgpath).match
     nroi = length(roimasks)
     rowdata = Array{NamedTuple{(:mrn, :label, :mean),Tuple{String,String,Float16}}}(undef, nroi)
     for roi in 1:nroi
