@@ -44,8 +44,8 @@ function runSUV(inputvolume, derivatives, templates; sidecar=nothing)
             subderivatives,
             "stripped" => "mni152")
 
-        smoothedvol = smoothvolume(registeredpet, subderivatives; σ = 2.97)
-        suvvolume = computesuvvolume(smoothedvol, suvscalefactor, "pet" => "suv_pet")
+        #smoothedvol = smoothvolume(registeredpet, subderivatives; σ = 2.97)
+        suvvolume = computesuvvolume(registeredpet, suvscalefactor, "pet" => "suv_pet")
 
         getmeans(suvvolume, templates)
 
