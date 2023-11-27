@@ -10,6 +10,7 @@ using NIfTI
 using Pkg
 using Statistics: mean
 using DataFrames
+using ImageFiltering: KernelFactors, imfilter
 using CSV
 const KGTOGRAMS = 1000
 
@@ -40,7 +41,7 @@ function checkforkeyspresent(keystocheck, path)
     return parse(Int, readchomp(`grep -Ec $searchstring $path`))
 end
 
-function editjsonsidecar(sidecar, keysfile, zippath, skipexistingkeys = false)
+function editjsonsidecar(sidecar, keysfile, zippath, skipexistingkeys=false)
     keystoadd = readlines(keysfile)
     nkeys = length(keystoadd)
 
@@ -82,8 +83,6 @@ function editjsonsidecar(sidecar, keysfile, zippath, skipexistingkeys = false)
 end
 
 function resamplepixdims(inputvolume, outdir, suffix)
-    #from fsl.data import image
-    #from fsl.utils.image import resample
     fslimage = pyimport("fsl.data.image")
     fslresample = pyimport("fsl.utils.image.resample")
     i = fslimage.Image(inputvolume)
@@ -103,23 +102,6 @@ function resampletoref(inputvolume, lname, reference)
     o = fslresample.resampleToReference(inputvolume, fslimage.Image(reference))
     vol = nib.Nifti1Image(o...)
     nib.save(vol, joinpath(dirname(reference), lname * "-mask.nii.gz"))
-    # ni = NIVolume(first(o))
-    # setaffine(ni.header, last(o))
-    # return ni
-end
-
-function smoothvolume(inputvolume, outdir; σ = 3.4)
-    bn = basename(inputvolume)
-    outfile = joinpath(outdir, replace(bn, "pet" => "8mm_pet"))
-    badgerfsl = `/data/h_vmac/vmac_imaging/fsl_v6.0.5.1.sif`
-    # cmd = `fslmaths $inputvolume -s 3.4 $outfile`
-    cmd = `fslmaths $inputvolume -s $σ $outfile`
-    if isfile(replace(string(badgerfsl), "`" => ""))
-        run(`singularity exec $badgerfsl $cmd`)
-    else
-        run(cmd)
-    end
-    return outfile
 end
 
 function getsuvbwscalefactor(sidecarpath)
@@ -182,10 +164,10 @@ function skullstrip(inputvolume, outdir, suffix)
     deepbet = pyimport("deepbet")
     deepbet.run_bet([inputvolume],
         [outfile],
-        tiv_paths = [tivpath],
-        threshold = 0.9,
-        n_dilate = -2,
-        no_gpu = true)
+        tiv_paths=[tivpath],
+        threshold=0.9,
+        n_dilate=-2,
+        no_gpu=true)
     return outfile
 end
 
@@ -219,15 +201,15 @@ function elastixregistration(fixedvolumepath, movingvolumepath, outdir, suffix)
     moving_image = itk.imread(movingvolumepath, itk.F)
     result_image, result_transform_parameters = itk.elastix_registration_method(fixed_image,
         moving_image,
-        output_directory = itk_meta_dir,
-        log_file_name = "elastix.log")
+        output_directory=itk_meta_dir,
+        log_file_name="elastix.log")
 
     itk.imwrite(result_image, finalmovingvolume)
     setsformqform(finalmovingvolume)
     return finalmovingvolume
 end
 
-function generatemasks(refimg, atlases = ["mni", "harvardoxford-subcortical", "harvardoxford-cortical"])
+function generatemasks(refimg, atlases=["mni", "harvardoxford-subcortical", "harvardoxford-cortical"])
     fslatlases = pyimport("fsl.data.atlases")
     fslatlases.rescanAtlases()
     t = [fslatlases.hasAtlas(atlas) for atlas in atlases]
@@ -244,13 +226,14 @@ function generatemasks(refimg, atlases = ["mni", "harvardoxford-subcortical", "h
     end
 end
 
-function getmeans(suvimgpath, templatedir)
+function getmeans(suvimgpath, templatedir, σ=2.97)
+    gausskern = KernelFactors.gaussian((σ, σ, σ))
     roimasks = glob("*mask.nii.gz", templatedir)
     suvimg = niread(suvimgpath)
     outfile = @chain suvimgpath basename split(_, ".") first
     mrn = match(r"(?<=sub-)(\d{7,})", suvimgpath).match
     nroi = length(roimasks)
-    rowdata = Array{NamedTuple{(:mrn, :label, :mean), Tuple{String, String, Float16}}}(undef,
+    rowdata = Array{NamedTuple{(:mrn, :label, :mean),Tuple{String,String,Float16}}}(undef,
         nroi)
     for roi in 1:nroi
         maskfile = roimasks[roi]
@@ -260,10 +243,14 @@ function getmeans(suvimgpath, templatedir)
             "-mask" => "",
             "harvardoxford" => "harvox",
             "cortical" => "cort")
+        println(label)
         masknii = niread(maskfile)
-        mask = (voxel -> voxel == 1.0 ? voxel : missing).(masknii)
-        meanval = (mean ∘ skipmissing)(suvimg .* mask)
-        rowdata[roi] = (; mrn, label, mean = meanval)
+        maskwithmissing = (voxel -> voxel == 1.0 ? voxel : missing).(masknii)
+        maskedsuvimg = (suvimg .* masknii)
+        smoothedmasked = imfilter(maskedsuvimg, gausskern)
+        # niwrite("derivatives/smoothedout/smoothedout$roi.nii.gz", NIVolume(suvimg.header, suvimg.extensions, smoothedmasked))
+        meanval = (mean ∘ skipmissing)(smoothedmasked .* maskwithmissing)
+        rowdata[roi] = (; mrn, label, mean=meanval)
     end
     df = DataFrame(vcat(rowdata))
     CSV.write(joinpath(dirname(suvimgpath), "$outfile-mean-suv.csv"),
