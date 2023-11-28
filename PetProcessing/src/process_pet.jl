@@ -47,7 +47,7 @@ function runSUV(inputvolume, derivatives, templates; sidecar=nothing)
         #smoothedvol = smoothvolume(registeredpet, subderivatives; σ = 2.97)
         suvvolume = computesuvvolume(registeredpet, suvscalefactor, "pet" => "suv_pet")
 
-        getmeans(suvvolume, templates)
+        csv = getmeans(suvvolume, templates)
 
         run(`zip -9rTm $(joinpath(subderivatives, "$zipname-intermediatefiles.zip")) $subderivatives -x  \*.csv \*suv_pet.nii.gz `)
 

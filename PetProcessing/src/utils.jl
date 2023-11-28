@@ -41,7 +41,7 @@ function checkforkeyspresent(keystocheck, path)
     return parse(Int, readchomp(`grep -Ec $searchstring $path`))
 end
 
-function editjsonsidecar(sidecar, keysfile, zippath, skipexistingkeys=false)
+function editjsonsidecar(sidecar, keysfile, zippath, skipexistingkeys = false)
     keystoadd = readlines(keysfile)
     nkeys = length(keystoadd)
 
@@ -106,7 +106,9 @@ end
 
 function getsuvbwscalefactor(sidecarpath)
     json = (JSON3.read ∘ read)(sidecarpath)
-    suvbwscalefactor = let seriestime = Time(json.SeriesTime, dateformat"HHMMSS")
+    trimmedtime = replace(json.SeriesTime, r"\.\d{1,}" => "")
+    suvbwscalefactor = let 
+        seriestime = Time(trimmedtime, dateformat"HHMMSS")
         radiopharmaceuticalstarttime = Time(split(json.RadiopharmaceuticalStartTime, '.') |>
                                             first,
             dateformat"HHMMSS")
@@ -164,10 +166,10 @@ function skullstrip(inputvolume, outdir, suffix)
     deepbet = pyimport("deepbet")
     deepbet.run_bet([inputvolume],
         [outfile],
-        tiv_paths=[tivpath],
-        threshold=0.9,
-        n_dilate=-2,
-        no_gpu=true)
+        tiv_paths = [tivpath],
+        threshold = 0.9,
+        n_dilate = -2,
+        no_gpu = true)
     return outfile
 end
 
@@ -190,7 +192,8 @@ dipy in `rigidregistration` with itk. Maybe example-18 MONAI_affine_elastix_nonl
 function elastixregistration(fixedvolumepath, movingvolumepath, outdir, suffix)
     bn = basename(movingvolumepath)
     finalmovingvolume = joinpath(outdir, replace(bn, suffix))
-    itk_meta_dir = joinpath(outdir, replace(finalmovingvolume, ".nii.gz" => "-elastix_data"))
+    itk_meta_dir = joinpath(outdir,
+        replace(finalmovingvolume, ".nii.gz" => "-elastix_data"))
     if !isdir(itk_meta_dir)
         mkpath(itk_meta_dir)
     end
@@ -201,15 +204,16 @@ function elastixregistration(fixedvolumepath, movingvolumepath, outdir, suffix)
     moving_image = itk.imread(movingvolumepath, itk.F)
     result_image, result_transform_parameters = itk.elastix_registration_method(fixed_image,
         moving_image,
-        output_directory=itk_meta_dir,
-        log_file_name="elastix.log")
+        output_directory = itk_meta_dir,
+        log_file_name = "elastix.log")
 
     itk.imwrite(result_image, finalmovingvolume)
     setsformqform(finalmovingvolume)
     return finalmovingvolume
 end
 
-function generatemasks(refimg, atlases=["mni", "harvardoxford-subcortical", "harvardoxford-cortical"])
+function generatemasks(refimg,
+        atlases = ["mni", "harvardoxford-subcortical", "harvardoxford-cortical"])
     fslatlases = pyimport("fsl.data.atlases")
     fslatlases.rescanAtlases()
     t = [fslatlases.hasAtlas(atlas) for atlas in atlases]
@@ -226,14 +230,14 @@ function generatemasks(refimg, atlases=["mni", "harvardoxford-subcortical", "har
     end
 end
 
-function getmeans(suvimgpath, templatedir, σ=2.97)
+function getmeans(suvimgpath, templatedir, σ = 2.97)
     gausskern = KernelFactors.gaussian((σ, σ, σ))
     roimasks = glob("*mask.nii.gz", templatedir)
     suvimg = niread(suvimgpath)
     outfile = @chain suvimgpath basename split(_, ".") first
     mrn = match(r"(?<=sub-)(\d{7,})", suvimgpath).match
     nroi = length(roimasks)
-    rowdata = Array{NamedTuple{(:mrn, :label, :mean),Tuple{String,String,Float16}}}(undef,
+    rowdata = Array{NamedTuple{(:mrn, :label, :mean), Tuple{String, String, Float16}}}(undef,
         nroi)
     for roi in 1:nroi
         maskfile = roimasks[roi]
@@ -250,9 +254,11 @@ function getmeans(suvimgpath, templatedir, σ=2.97)
         smoothedmasked = imfilter(maskedsuvimg, gausskern)
         # niwrite("derivatives/smoothedout/smoothedout$roi.nii.gz", NIVolume(suvimg.header, suvimg.extensions, smoothedmasked))
         meanval = (mean ∘ skipmissing)(smoothedmasked .* maskwithmissing)
-        rowdata[roi] = (; mrn, label, mean=meanval)
+        rowdata[roi] = (; mrn, label, mean = meanval)
     end
     df = DataFrame(vcat(rowdata))
-    CSV.write(joinpath(dirname(suvimgpath), "$outfile-mean-suv.csv"),
+    outcsv = joinpath(dirname(suvimgpath), "$outfile-mean-suv.csv")
+    CSV.write(outcsv,
         unstack(df, :label, :mean))
+    return outcsv
 end
