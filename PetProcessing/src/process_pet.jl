@@ -50,7 +50,7 @@ function runSUV(inputvolume, derivatives, templates; sidecar=nothing)
         csv = getmeans(suvvolume, templates)
 
         run(`zip -9rTm $(joinpath(subderivatives, "$zipname-intermediatefiles.zip")) $subderivatives -x  \*.csv \*suv_pet.nii.gz `)
-
+        println(csv)
     catch
         logfile = replace(basename(inputvolume), ".nii.gz" => "_log.txt")
         exc = current_exceptions()
