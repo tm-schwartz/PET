@@ -3,9 +3,12 @@ using NIfTI
 using Distributed
 using UUIDs
 using JSON3
+using Chain
+using PyCall
 using Makie, CairoMakie
+include("rglob.jl")
 
-const excluded = r"^((?!vumcct).)*$|mip|leg[s]?|nac|screen|ds\_store|fused|statistic[s]?"i
+const excluded = r"^((?!vumcct).)*$|mip|leg[s]?|nac|tof|screen|ds\_store|fused|fusion|statistic[s]?"i
 
 subfiles = startswith("sub-")
 exclude(input::Vector{String}) = filter(fn -> !occursin(excluded, fn), input)
@@ -49,7 +52,7 @@ function process_descriptor(descriptor::AbstractString)
     matches = findall(re, descriptor)
     return join([descriptor[m] for m in matches], "_")
 end
- 
+
 function process_descriptor(descriptor::Vector)
     desc = join(descriptor .|> strip, "_") # strip leading and trailing spaces
     return replace(desc, " " => "_")  # account for spaces in vector elements
@@ -60,6 +63,7 @@ function dcm_dir_to_series(dir)
     series_dict = Dict()
     for dicom in dicom_files
         dcm = dcm_parse(dicom)
+        try
         seriesdescr = replace(dcm[tag"SeriesDescription"], " " => "_", r"\W" => "")
         imagetype = process_descriptor(dcm[tag"ImageType"])
         if :StationName in propertynames(dcm)
@@ -69,11 +73,21 @@ function dcm_dir_to_series(dir)
         end
         seriesdata = join([seriesdescr, imagetype, stationname], "_")
         series_path = joinpath(dir, seriesdata)
+        if :Modality in propertynames(dcm)
+            series_path = series_path * "_mod-$(dcm[tag"Modality"])"
+        end
         dicom_currentpath = joinpath(dir, dicom)
         if haskey(series_dict, series_path)
             push!(series_dict[series_path], dicom_currentpath)
         else
             series_dict[series_path] = String[dicom_currentpath]
+        end
+        catch e
+            open("bids.log.txt", "a") do f
+                println(f, "-"^80)
+                println(f, e)
+                println(f, dicom)
+            end
         end
     end
     return series_dict
@@ -90,7 +104,7 @@ function create_softlinks(target, img_dir)
 end
 
 
-function dcm2niix(input_dir::String, pyenv::String)
+function dcm2niixog(input_dir::String, pyenv::String)
     command = `sh -c "source $pyenv; dcm2niix -a y -m y -b y -ba n -z y -f sub-%i_sdit-%f_ac-%g_dt-%t_pet $input_dir"`
     try
         output = string(readlines(Cmd(command))...)
@@ -98,6 +112,22 @@ function dcm2niix(input_dir::String, pyenv::String)
         display(e)
     end
 end
+
+function dcm2niix(input_dir)
+    dcm2niix = pyimport("dcm2niix")
+    dcm = readdir(input_dir,join=true) |> first |> dcm_parse
+    modality = "PT"
+    if :Modality in propertynames(dcm)
+        modality = dcm[tag"Modality"]
+    end
+    dcm2niixargs = ["-a", "y", "-m", "y", "-b", "y", "-ba", "n", "-z", "y", "-f", "sub-%i_sdit-%f_ac-%g_dt-%t_$modality", input_dir]
+    try
+        dcm2niix.main(dcm2niixargs)
+    catch e
+        display(e)
+    end
+end
+
 
 function _slicepng(input_path)
     png_name = (first ∘ splitext ∘ first ∘ splitext ∘ basename)(input_path)
@@ -126,7 +156,8 @@ end
 
 function slicepng(data_dir, img_link_dir)
     studypaths = filter(isdir, readdir(data_dir, join=true))
-    seriespaths = exclude(filter(isdir, append!(map(sp -> readdir(sp, join=true), studypaths)...)))
+    #seriespaths = exclude(filter(isdir, append!(map(sp -> readdir(sp, join=true), studypaths)...))) Why filter again?
+    # add glob here
     niftipaths = append!(map(seriespaths) do sp
         return filter(np -> occursin(r"\.nii\.gz$", np), readdir(sp, join=true))
     end...)
@@ -144,11 +175,7 @@ function slicepng(data_dir, img_link_dir)
     return
 end
 
-function tobids(data_dir, bidsdir, modalityfolder)
-    niftifiles = readlines(Cmd(`find $data_dir -name 'sub*gz' -or -name 'sub*json'`))
-    if isempty(niftifiles)
-        return
-    end
+function tobids(niftifiles, bidsdir, modalityfolder)
     subdir = niftifiles |> first |> basename |> (x -> split(x, "_")) |> first |> (x -> joinpath(bidsdir, x, modalityfolder))
     if !isdir(subdir)
         mkpath(subdir)
@@ -165,7 +192,23 @@ function tobids(data_dir, bidsdir, modalityfolder)
     return
 end
 
-function process_data_dir(data_dir, bidsdir, modalityfolder, pyenv)
+function tobids(niftifiles, bidsdir; modalityfolder=nothing)
+    map(niftifiles) do f
+        modalityfolder = @chain f basename split(_, "_")  last split(_, ".") first
+        subdir = @chain f basename split(_, "_") first string joinpath(bidsdir, _, modalityfolder)
+        mkpath(subdir)
+        dest = joinpath(subdir, basename(f))
+        try
+            mv(f, dest)
+        catch y
+            display(y)
+            display(f)
+        end
+    end
+    return
+end
+
+function process_data_dir(data_dir, bidsdir, modalityfolder; pyenv=nothing, filterseriesdescription=false)
     contents = readdir(data_dir)
     studies = filter(d -> isdir(joinpath(data_dir, d)), contents)
     img_links = joinpath(data_dir, "image_links")
@@ -187,19 +230,22 @@ function process_data_dir(data_dir, bidsdir, modalityfolder, pyenv)
                     mv(json_file, new_json_path)
                 end
             end
-            if exclude(absolute_seriespath)
+            if filterseriesdescription && exclude(absolute_seriespath)
                 continue
             else
                 dcm_fix_name(absolute_seriespath)
-                dcm2niix(absolute_seriespath, pyenv)
+                dcm2niix(absolute_seriespath)
             end
         end
     end
-    niftifiles = readlines(Cmd(`find $data_dir -name 'sub*gz' -or -name 'sub*json'`))
+    # niftifiles = readlines(Cmd(`find $data_dir -name 'sub*gz' -or -name 'sub*json'`))
+    niftifiles = rglob(data_dir, r".*(nii.gz|json)")
     if isempty(niftifiles)
         return
     else
-        slicepng(data_dir, img_links)
-        tobids(data_dir, bidsdir, modalityfolder)
+        #slicepng(data_dir, img_links)
+       tobids(niftifiles, bidsdir)
     end
 end
+
+
