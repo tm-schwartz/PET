@@ -107,7 +107,7 @@ end
 function getsuvbwscalefactor(sidecarpath)
     json = (JSON3.read ∘ read)(sidecarpath)
     trimmedtime = replace(json.SeriesTime, r"\.\d{1,}" => "")
-    suvbwscalefactor = let 
+    suvbwscalefactor = let
         seriestime = Time(trimmedtime, dateformat"HHMMSS")
         radiopharmaceuticalstarttime = Time(split(json.RadiopharmaceuticalStartTime, '.') |>
                                             first,
