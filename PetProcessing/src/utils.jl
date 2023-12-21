@@ -190,9 +190,9 @@ function loadsidecar(sidecar)
     return JSON3.read(sidecar)
 end
 
-function robustfov(inputvolume, outdir)
+function robustfov(inputvolume, outdir; suffix="pet"=>"cropped_pet")
     bn = basename(inputvolume)
-    outfile = joinpath(outdir, replace(bn, "pet" => "cropped_pet"))
+    outfile = joinpath(outdir, replace(bn, suffix))
     if occursin(r"HN"i, bn)
         cp(inputvolume, outfile)
     else
@@ -223,7 +223,8 @@ end
 function skullstrip(inputvolume, outdir, suffix, threshold=0.9, dilation=-2)
     bn = basename(inputvolume)
     outfile = joinpath(outdir, replace(bn, suffix))
-    tivpath = joinpath(outdir, replace(outfile, "nii.gz" => "TIV.csv"))
+    #tivpath = joinpath(outdir, replace(outfile, "nii.gz" => "TIV.csv"))
+    tivpath = replace(outfile, "nii.gz" => "TIV.csv")
     deepbet = pyimport("deepbet")
     deepbet.run_bet([inputvolume],
         [outfile],
@@ -231,6 +232,13 @@ function skullstrip(inputvolume, outdir, suffix, threshold=0.9, dilation=-2)
         threshold=threshold,
         n_dilate=dilation,
         no_gpu=true)
+    return outfile
+end
+
+function skullstripwb(inputvolume, outdir, suffix)
+    bn = basename(inputvolume)
+    outfile = joinpath(outdir, replace(bn, suffix))
+    run(`singularity exec /data/h_vmac/vmac_imaging/synthstrip.1.5.sif mri_synthstrip -i $inputvolume -o $outfile`)
     return outfile
 end
 
@@ -274,14 +282,18 @@ function rigidregistration(fixedvolumepath, movingvolumepath, outdir)
 end
 =#
 
-function rigidregistration(fixedvolumepath, movingvolumepath, outdir, suffix)
+function rigidregistration(fixedvolumepath, movingvolumepath, outdir, suffix, progressive=false)
     bn = basename(movingvolumepath)
     finalmovingvolumepath = replace(bn, suffix)
     finaltransform = replace(finalmovingvolumepath, "nii.gz" => "affine.txt")
     outaffinedir = "affine-registration"
     out_dir = joinpath(outdir, outaffinedir)
     dipy_align_affine = joinpath(Conda.BINDIR, "dipy_align_affine")
-    run(`$dipy_align_affine $fixedvolumepath $movingvolumepath --transform "affine" --out_dir $out_dir --out_moved $finalmovingvolumepath --out_affine $finaltransform --progressive`)
+    cmdstr = `$dipy_align_affine $fixedvolumepath $movingvolumepath --transform "affine" --out_dir $out_dir --out_moved $finalmovingvolumepath --out_affine $finaltransform`
+    if progressive
+        cmdstr = `$cmdstr --progressive`
+    end
+    run(cmdstr)
     return joinpath(out_dir, finalmovingvolumepath)
 end
 
@@ -455,9 +467,9 @@ function addinfotocsv(sidecar, csv)
     df = DataFrame(CSV.File(csv))
     js = JSON3.read(read(sidecar))
     df[:, "AccessionNumber"] .= js.AccessionNumber
-    df[:, "AdditionalPatientHistory"] .= js.AdditionalPatientHistory
+    df[:, "AdditionalPatientHistory"] .= js.AdditionalPatientHistory |> strip |> (s->replace(s, '\n'=>' '))
     df[:, "AcquisitionDateTime"] .= js.AcquisitionDateTime
-    df[:, "ReasonForStudy"] .= js.ReasonForStudy
+    df[:, "ReasonForStudy"] .= js.ReasonForStudy |> strip |> (s->replace(s, '\n'=>' '))
     l =[:mrn, :AccessionNumber, :AcquisitionDateTime, :AdditionalPatientHistory, :ReasonForStudy]
     CSV.write(csv, df[:, Cols(l..., Not(l))]; transform=(col, val) -> something(val, missing))
 end
