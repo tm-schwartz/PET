@@ -238,7 +238,15 @@ end
 function skullstripwb(inputvolume, outdir, suffix)
     bn = basename(inputvolume)
     outfile = joinpath(outdir, replace(bn, suffix))
-    run(`singularity exec /data/h_vmac/vmac_imaging/synthstrip.1.5.sif mri_synthstrip -i $inputvolume -o $outfile`)
+    badgersynthstrip = `data/h_vmac/vmac_imaging/synthstrip.1.5.sif`
+    cmd = `mri_synthstrip -i $inputvolume -o $outfile`
+    if isfile(replace(string(badgersynthstrip), "`" => ""))
+        run(`singularity exec $badgersynthstrip $cmd`)
+    else
+        run(`/Applications/freesurfer/dev/bin/$cmd`)
+    end
+    #run(`singularity exec /data/h_vmac/vmac_imaging/synthstrip.1.5.sif mri_synthstrip -i $inputvolume -o $outfile`)
+    #run(`/Applications/freesurfer/dev/bin/mri_synthstrip -i $inputvolume -o $outfile`)
     return outfile
 end
 
@@ -368,16 +376,29 @@ function generatemasks(refimg,
     end
 end
 
+function calculatemetaroistatistic(suvimagpath, templatedir, σ=2.97)
+    _metaroimask = glob("Composite-mask*", templatedir) |> only |> niread;
+    _referenceregionmask = glob("ponsvermis_1mm_bin-mask*", templatedir) |> only |> niread;
+    metaroimask = (voxel -> voxel == 1.0 ? voxel : missing).(vox(_metaroimask, :, :, :))
+    referenceregionmask = (voxel -> voxel == 1.0 ? voxel : missing).(vox(_referenceregionmask, :, :, :))
+    suvimage = niread(suvimagpath)
+    suvmetaroimean =  (mean ∘ skipmissing)(suvimage .* metaroimask)
+    suvreferenceregionmean =  @chain (suvimage .* referenceregionmask) skipmissing collect partialsort(_, 1:(length(_)÷2), rev=true) mean
+    return suvmetaroimean/suvreferenceregionmean
+end
+
 function getmeans(suvimgpath, templatedir, σ=2.97)
     gausskern = KernelFactors.gaussian((σ, σ, σ))
-    roimasks = glob("*mask.nii.gz", templatedir)
+    roimasks = filter(glob("*mask.nii.gz", templatedir)) do m
+        !occursin("ponsvermis_1mm_bin-mask", m)
+    end
     suvimg = niread(suvimgpath)
     outfile = @chain suvimgpath basename split(_, ".") first
     mrn = match(r"(?<=sub-)(\d{7,})", suvimgpath).match
-    nroi = length(roimasks)
+    nroi = length(roimasks) + 1  # account for adding metaroi statistic after loop
     rowdata = Array{NamedTuple{(:mrn, :label, :mean),Tuple{String,String,Float16}}}(undef,
         nroi)
-    for roi in 1:nroi
+    for roi in 1:nroi - 1
         maskfile = roimasks[roi]
         label = @chain maskfile basename replace(_,
             ".nii.gz" => "",
@@ -386,7 +407,7 @@ function getmeans(suvimgpath, templatedir, σ=2.97)
             "harvardoxford" => "harvox",
             "cortical" => "cort")
         masknii = niread(maskfile)
-        maskwithmissing = (voxel -> voxel == 1.0 ? voxel : missing).(vox(masknii, :,:,:))
+        maskwithmissing = (voxel -> voxel == 1.0 ? voxel : missing).(vox(masknii, :, :, :))
         maskedsuvimg = (suvimg .* masknii)
         #smoothedmasked = imfilter(maskedsuvimg, gausskern)
         #niwrite(joinpath(homedir(), "projects/PET-LT/bidsdir/derivatives/roiouts-noct/smoothedout$roi.nii.gz"), NIVolume(suvimg.header, suvimg.extensions, smoothedmasked))
@@ -394,6 +415,9 @@ function getmeans(suvimgpath, templatedir, σ=2.97)
         meanval = (mean ∘ skipmissing)(maskedsuvimg .* maskwithmissing)
         rowdata[roi] = (; mrn, label, mean=meanval)
     end
+
+    rowdata[nroi] = (; mrn, label = "metaroistat", mean = calculatemetaroistatistic(suvimgpath, templatedir))
+
     df = DataFrame(vcat(rowdata))
     outcsv = joinpath(dirname(suvimgpath), "$outfile-mean-suv.csv")
     CSV.write(outcsv,
@@ -419,11 +443,22 @@ function defaultstructure(datadir)
 
     for (i, path) in enumerate(dicoms)
         dcm = dcm_parse(path)
-        siu = (isnothing(dcm.RequestAttributesSequence) ? dcm.StudyInstanceUID : dcm.RequestAttributesSequence[1].StudyInstanceUID )
+        if isnothing(dcm.RequestAttributesSequence) || !isnothing(dcm.RequestAttributesSequence[1].StudyInstanceUID) || isempty(something(dcm.RequestAttributesSequence[1].StudyInstanceUID, []))
+            siu = dcm.StudyInstanceUID
+        else
+            siu = dcm.RequestAttributesSequence[1].StudyInstanceUID
+        end
+        if siu isa Vector
+            println(path)
+        end
         msiu = dcm.Modality * "." * dcm.SOPInstanceUID * "." * (isempty(dcm.InstanceNumber) ? basename(path) : string(dcm.InstanceNumber))
-        arr[i] = (; studyinstanceuid=siu, modalitysopinstanceuid=msiu, ogpath=path)
+        if isnothing(siu)
+            println(path)
+        end
+                arr[i] = (; studyinstanceuid=siu, modalitysopinstanceuid=msiu, ogpath=path)
     end
-    mkdir("stagingdir")
+   
+    mkpath("stagingdir")
 
     for row in arr
         mkpath(joinpath("stagingdir", row.studyinstanceuid))
@@ -452,9 +487,9 @@ function windowimage(inputvolumepath, windowcenter, windowwidth, makemask=false)
     if makemask
         windowimage[(windowimage.>=100).|(windowimage.<0)] .= 0
         windowimage[windowimage.>0] .= 1
-        suffix = ".nii.gz"=>"_BINARY_MASK.nii.gz"
+        suffix = ".nii.gz" => "_BINARY_MASK.nii.gz"
     else 
-        suffix = ".nii.gz"=>"_WINDOWED.nii.gz"
+        suffix = ".nii.gz" => "_WINDOWED.nii.gz"
     end
     header = inputvolume.header
     header.scl_inter = 0.0f0  # zero out because we already applied slope/intercept by accessing data w/ `vox`                                
@@ -466,10 +501,19 @@ end
 function addinfotocsv(sidecar, csv)
     df = DataFrame(CSV.File(csv))
     js = JSON3.read(read(sidecar))
-    df[:, "AccessionNumber"] .= js.AccessionNumber
-    df[:, "AdditionalPatientHistory"] .= js.AdditionalPatientHistory |> strip |> (s->replace(s, '\n'=>' '))
-    df[:, "AcquisitionDateTime"] .= js.AcquisitionDateTime
-    df[:, "ReasonForStudy"] .= js.ReasonForStudy |> strip |> (s->replace(s, '\n'=>' '))
-    l =[:mrn, :AccessionNumber, :AcquisitionDateTime, :AdditionalPatientHistory, :ReasonForStudy]
+    df[:, "PatientAge"] .= js.PatientAge
+    df[:, "AccessionNumber"] .= parse(Int,js.AccessionNumber)
+    df[:, "AdditionalPatientHistory"] .= something(js.AdditionalPatientHistory, " ") |> strip |> (s->replace(s, '\n'=>' '))
+    df[:, "AcquisitionDateTime"] .= Date(match(r"(.*:\d{2})", js.AcquisitionDateTime).captures |> only, dateformat"YYYY-m-dTHH:MM:SS")
+    df[:, "ReasonForStudy"] .= @chain js.ReasonForStudy begin 
+    something(_, missing)
+    if !ismissing(_) 
+        strip  
+        replace(_, "\n"=> " ")
+    else
+         missing
+    end
+end
+    l =[:mrn, :AccessionNumber, :AcquisitionDateTime, :PatientAge, :AdditionalPatientHistory, :ReasonForStudy]
     CSV.write(csv, df[:, Cols(l..., Not(l))]; transform=(col, val) -> something(val, missing))
 end
