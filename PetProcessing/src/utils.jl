@@ -194,7 +194,7 @@ function robustfov(inputvolume, outdir; suffix="pet"=>"cropped_pet")
     bn = basename(inputvolume)
     outfile = joinpath(outdir, replace(bn, suffix))
     if occursin(r"HN"i, bn)
-        cp(inputvolume, outfile)
+        cp(inputvolume, outfile; force=true)
     else
         badgerfsl = `/data/h_vmac/vmac_imaging/fsl_v6.0.5.1.sif`
         cmd = `robustfov -i $inputvolume -r $outfile`
@@ -238,7 +238,7 @@ end
 function skullstripwb(inputvolume, outdir, suffix)
     bn = basename(inputvolume)
     outfile = joinpath(outdir, replace(bn, suffix))
-    badgersynthstrip = `data/h_vmac/vmac_imaging/synthstrip.1.5.sif`
+    badgersynthstrip = `/data/h_vmac/vmac_imaging/synthstrip.1.5.sif`
     cmd = `mri_synthstrip -i $inputvolume -o $outfile`
     if isfile(replace(string(badgersynthstrip), "`" => ""))
         run(`singularity exec $badgersynthstrip $cmd`)
@@ -330,7 +330,7 @@ function elastixregistration(fixedvolumepath, movingvolumepath, outdir, suffix, 
         output_directory=itk_meta_dir,
         parameter_object=parameter_object,
         #log_file_name="elastix.log")
-        log_to_console=true)
+        log_to_console=false)
 
     itk.imwrite(result_image, finalmovingvolume)
     setsformqform(finalmovingvolume)
