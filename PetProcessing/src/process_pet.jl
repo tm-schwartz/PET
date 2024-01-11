@@ -2,14 +2,14 @@
 #using .PetProcessing
 include("utils.jl")
 
-function runSUV(inputvolume, derivatives, templates; sidecar=nothing)
+function runSUV(inputvolume, derivatives, templates; sidecar=nothing, CT=false, CTpattern="SOFT_BRAIN", croppet=true)
     if occursin(r"fusion"i, inputvolume)
         println("Not processing fusion $inputvolume")
         exit()
     end
 
     if isnothing(sidecar)
-    sidecar = replace(inputvolume, "nii.gz" => "json")
+        sidecar = replace(inputvolume, "nii.gz" => "json")
     end
     subject = split(inputvolume |> basename, "_") |> first
     subderivatives = joinpath(derivatives,
@@ -19,7 +19,6 @@ function runSUV(inputvolume, derivatives, templates; sidecar=nothing)
         sidecar = replace(sidecar, "pet_Eq_1.json" => "pet.json")
     end
 
-    zipname = subderivatives |> basename 
 
     suvscalefactor = getsuvbwscalefactor(sidecar)
 
@@ -28,8 +27,28 @@ function runSUV(inputvolume, derivatives, templates; sidecar=nothing)
     end
 
     try
-        croppedvol = robustfov(inputvolume, subderivatives)
-        resampled = resamplepixdims(croppedvol, subderivatives, "cropped" => "resampled")
+        if occursin("_PT.", inputvolume)
+           s = "_PT"
+        else
+            s = "_pet"
+        end
+        suffix = s =>"_resampled"
+
+        if croppet
+            suffix = s =>"_cropped_PT"
+            inputtoresample = robustfov(inputvolume, subderivatives; suffix)
+            suffix="cropped"=>"resampled"
+        else
+            inputtoresample = inputvolume
+        end
+
+        resampled = resamplepixdims(inputtoresample, subderivatives, suffix)
+
+        if CT
+            ctpath = only(glob("*$CTpattern*nii.gz", joinpath(inputvolume |> dirname |> dirname, "CT")))
+            pettoct = rigidregistration(ctpath, resampled, subderivatives, "resampled" => "affine")
+
+        end
         affinereg = rigidregistration(joinpath(templates,
                 "MNI152_PET_1mm_coreg_smoothed.nii.gz"),
             resampled,
@@ -38,19 +57,25 @@ function runSUV(inputvolume, derivatives, templates; sidecar=nothing)
 
         strippedvol = skullstrip(affinereg, subderivatives, "affine" => "stripped")
 
-        registeredpet = elastixregistration(joinpath(templates,
+        (registeredpet, paramobj) = elastixregistration(joinpath(templates,
                 "MNI152_PET_1mm_coreg_stripped_smoothed.nii.gz"),
             strippedvol,
             subderivatives,
-            "stripped" => "mni152")
+            "stripped" => "mni152", "/data/h_vmac/schwart/fdg_pet/PetProcessing/src/param27.txt")
 
         #smoothedvol = smoothvolume(registeredpet, subderivatives; σ = 2.97)
-        suvvolume = computesuvvolume(registeredpet, suvscalefactor, "pet" => "suv_pet")
+        suffix = "mni152" => "mni152_SUV"
+        suvvolume = computesuvvolume(registeredpet, suvscalefactor, suffix)
 
         csv = getmeans(suvvolume, templates)
+        print(csv)
+        addinfotocsv(sidecar, csv)
+        zipname = subderivatives |> basename
+        cd(subderivatives)
+        run(`zip -9rTm $(zipname * "-intermediatefiles.zip") . -x  \*.csv \*suv\*.nii.gz \*SUV\*.nii.gz`)
 
-        run(`zip -9rTm $(joinpath(subderivatives, "$zipname-intermediatefiles.zip")) $subderivatives -x  \*.csv \*suv_pet.nii.gz `)
-        println(csv)
+        ## run(`zip -9rTm $(joinpath(subderivatives, "$zipname-intermediatefiles.zip")) $subderivatives -x  \*.csv \*suv_pet.nii.gz `)
+        
     catch
         logfile = replace(basename(inputvolume), ".nii.gz" => "_log.txt")
         exc = current_exceptions()
@@ -73,14 +98,17 @@ elseif first(ARGS) == "--initpy"
     initializepythonenv()
     exit()
 elseif first(ARGS) == "--suv"
-    if length(ARGS) == 5
+    if length(ARGS) == 5 && ARGS[2] == "-S"
         inputvolume, derivatives, templates, sidecar = abspath.(ARGS[2:end])
         runSUV(inputvolume, derivatives, templates; sidecar=sidecar)
+    elseif length(ARGS) == 5 && ARGS[2] == "--CT"
+        inputvolume, derivatives, templates = abspath.(ARGS[3:end])
+        runSUV(inputvolume, derivatives, templatesl; CT=true, CTpattern="SOFT_BRAIN")
     else
         inputvolume, derivatives, templates = abspath.(ARGS[2:end])
         runSUV(inputvolume, derivatives, templates)
     end
 elseif first(ARGS) == "--json"
     sidecar, keysfile, zippath = abspath.(ARGS[2:end])
-    editjsonsidecar(sidecar, keysfile, zippath)
+    editjsonsidecar(sidecar, keysfile; zippath=zippath)
 end
