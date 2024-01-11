@@ -19,7 +19,6 @@ function runSUV(inputvolume, derivatives, templates; sidecar=nothing, CT=false, 
         sidecar = replace(sidecar, "pet_Eq_1.json" => "pet.json")
     end
 
-    zipname = subderivatives |> basename
 
     suvscalefactor = getsuvbwscalefactor(sidecar)
 
@@ -28,9 +27,16 @@ function runSUV(inputvolume, derivatives, templates; sidecar=nothing, CT=false, 
     end
 
     try
-        suffix = "PT"=>"resampled"
+        if occursin("_PT.", inputvolume)
+           s = "_PT"
+        else
+            s = "_pet"
+        end
+        suffix = s =>"_resampled"
+
         if croppet
-            inputtoresample = robustfov(inputvolume, subderivatives)
+            suffix = s =>"_cropped_PT"
+            inputtoresample = robustfov(inputvolume, subderivatives; suffix)
             suffix="cropped"=>"resampled"
         else
             inputtoresample = inputvolume
@@ -55,15 +61,21 @@ function runSUV(inputvolume, derivatives, templates; sidecar=nothing, CT=false, 
                 "MNI152_PET_1mm_coreg_stripped_smoothed.nii.gz"),
             strippedvol,
             subderivatives,
-            "stripped" => "mni152", "/Users/schwartz/projects/PET-LT/bidsdir/derivatives/param27.txt")
+            "stripped" => "mni152", "/data/h_vmac/schwart/fdg_pet/PetProcessing/src/param27.txt")
 
         #smoothedvol = smoothvolume(registeredpet, subderivatives; σ = 2.97)
-        suvvolume = computesuvvolume(registeredpet, suvscalefactor, "pet" => "suv_pet")
+        suffix = "mni152" => "mni152_SUV"
+        suvvolume = computesuvvolume(registeredpet, suvscalefactor, suffix)
 
         csv = getmeans(suvvolume, templates)
-        
-        # run(`zip -9rTm $(joinpath(subderivatives, "$zipname-intermediatefiles.zip")) $subderivatives -x  \*.csv \*suv_pet.nii.gz `)
+        print(csv)
+        addinfotocsv(sidecar, csv)
+        zipname = subderivatives |> basename
+        cd(subderivatives)
+        run(`zip -9rTm $(zipname * "-intermediatefiles.zip") . -x  \*.csv \*suv\*.nii.gz \*SUV\*.nii.gz`)
 
+        ## run(`zip -9rTm $(joinpath(subderivatives, "$zipname-intermediatefiles.zip")) $subderivatives -x  \*.csv \*suv_pet.nii.gz `)
+        
     catch
         logfile = replace(basename(inputvolume), ".nii.gz" => "_log.txt")
         exc = current_exceptions()
@@ -92,11 +104,11 @@ elseif first(ARGS) == "--suv"
     elseif length(ARGS) == 5 && ARGS[2] == "--CT"
         inputvolume, derivatives, templates = abspath.(ARGS[3:end])
         runSUV(inputvolume, derivatives, templatesl; CT=true, CTpattern="SOFT_BRAIN")
-
+    else
         inputvolume, derivatives, templates = abspath.(ARGS[2:end])
         runSUV(inputvolume, derivatives, templates)
     end
 elseif first(ARGS) == "--json"
     sidecar, keysfile, zippath = abspath.(ARGS[2:end])
-    editjsonsidecar(sidecar, keysfile, zippath)
+    editjsonsidecar(sidecar, keysfile; zippath=zippath)
 end
