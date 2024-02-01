@@ -409,7 +409,8 @@ function getmeans(suvimgpath, templatedir, σ=2.97)
         masknii = niread(maskfile)
         maskwithmissing = (voxel -> voxel == 1.0 ? voxel : missing).(vox(masknii, :, :, :))
         maskedsuvimg = (suvimg .* masknii)
-        #smoothedmasked = imfilter(maskedsuvimg, gausskern)
+        #smoothedmasked = imfilter(maskedsuvimg, gausskern, NA())
+        #finalsmoothed = (smoothedmasked .* masknii)
         #niwrite(joinpath(homedir(), "projects/PET-LT/bidsdir/derivatives/roiouts-noct/smoothedout$roi.nii.gz"), NIVolume(suvimg.header, suvimg.extensions, smoothedmasked))
         #meanval = (mean ∘ skipmissing)(smoothedmasked .* maskwithmissing)
         meanval = (mean ∘ skipmissing)(maskedsuvimg .* maskwithmissing)
@@ -438,6 +439,8 @@ function defaultstructure(datadir)
             push!(dicoms, paths...)
         end
     end
+
+    
 
     arr = Array{NamedTuple{(:studyinstanceuid, :modalitysopinstanceuid, :ogpath),Tuple{String,String,String}}}(undef, length(dicoms))
 
@@ -502,6 +505,7 @@ function addinfotocsv(sidecar, csv)
     df = DataFrame(CSV.File(csv))
     js = JSON3.read(read(sidecar))
     df[:, "PatientAge"] .= js.PatientAge
+    df[:, "PatientSex"] .= js.PatientSex
     df[:, "AccessionNumber"] .= parse(Int,js.AccessionNumber)
     df[:, "AdditionalPatientHistory"] .= something(js.AdditionalPatientHistory, " ") |> strip |> (s->replace(s, '\n'=>' '))
     df[:, "AcquisitionDateTime"] .= Date(match(r"(.*:\d{2})", js.AcquisitionDateTime).captures |> only, dateformat"YYYY-m-dTHH:MM:SS")

@@ -19,6 +19,7 @@ function runSUV(inputvolume, derivatives, templates; sidecar=nothing, CT=false, 
         sidecar = replace(sidecar, "pet_Eq_1.json" => "pet.json")
     end
 
+    
 
     suvscalefactor = getsuvbwscalefactor(sidecar)
 
@@ -34,7 +35,7 @@ function runSUV(inputvolume, derivatives, templates; sidecar=nothing, CT=false, 
         end
         suffix = s =>"_resampled"
 
-        if croppet
+        if croppet && !occursin(r"brain"i, inputvolume)
             suffix = s =>"_cropped_PT"
             inputtoresample = robustfov(inputvolume, subderivatives; suffix)
             suffix="cropped"=>"resampled"
@@ -110,5 +111,6 @@ elseif first(ARGS) == "--suv"
     end
 elseif first(ARGS) == "--json"
     sidecar, keysfile, zippath = abspath.(ARGS[2:end])
-    editjsonsidecar(sidecar, keysfile; zippath=zippath)
+    sidecarreplace = replace(sidecar, "_Eq_1"=>"", ".nii.gz"=>".json")
+    editjsonsidecar(sidecarreplace, keysfile; zippath=zippath)
 end
