@@ -19,8 +19,6 @@ function runSUV(inputvolume, derivatives, templates; sidecar=nothing, CT=false, 
         sidecar = replace(sidecar, "pet_Eq_1.json" => "pet.json")
     end
 
-    
-
     suvscalefactor = getsuvbwscalefactor(sidecar)
 
     if !isdir(subderivatives)
@@ -59,22 +57,25 @@ function runSUV(inputvolume, derivatives, templates; sidecar=nothing, CT=false, 
         strippedvol = skullstrip(affinereg, subderivatives, "affine" => "stripped")
 
         (registeredpet, paramobj) = elastixregistration(joinpath(templates,
-                "MNI152_PET_1mm_coreg_stripped_smoothed.nii.gz"),
+                "masked-MNI-PET-STRIPPED-SMOOTHED.nii.gz"),
             strippedvol,
             subderivatives,
-            "stripped" => "mni152", "/data/h_vmac/schwart/fdg_pet/PetProcessing/src/param27.txt")
+            "stripped" => "mni152", "/data/h_vmac/schwart_restore/fdg_pet/PetProcessing/src/param27.txt")
 
         #smoothedvol = smoothvolume(registeredpet, subderivatives; σ = 2.97)
-        suffix = "mni152" => "mni152_SUV"
-        suvvolume = computesuvvolume(registeredpet, suvscalefactor, suffix)
+        suffix = "mni152" => "mni152_SUVR"
+        suvvolume = computesuvrvolume(registeredpet, suvscalefactor, suffix, templates, "rpons_vermis-mask.nii.gz")
+
+        # suvvolume = computesuvvolume(registeredpet, suvscalefactor, suffix)
 
         csv = getmeans(suvvolume, templates)
         print(csv)
         addinfotocsv(sidecar, csv)
+        #
         zipname = subderivatives |> basename
         cd(subderivatives)
-        run(`zip -9rTm $(zipname * "-intermediatefiles.zip") . -x  \*.csv \*suv\*.nii.gz \*SUV\*.nii.gz`)
-
+        run(`zip -9rTm $(zipname * "-intermediatefiles.zip") . -x  \*.csv \*suv\*.nii.gz \*SUV\*.nii.gz \*SUVR\*.nii.gz `)
+        
         ## run(`zip -9rTm $(joinpath(subderivatives, "$zipname-intermediatefiles.zip")) $subderivatives -x  \*.csv \*suv_pet.nii.gz `)
         
     catch
