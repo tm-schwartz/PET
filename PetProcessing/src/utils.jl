@@ -12,6 +12,7 @@ using Pkg
 using Statistics: mean
 using DataFrames
 using ImageFiltering: KernelFactors, imfilter
+import ImageFiltering.NA as IFNA
 using CSV
 const KGTOGRAMS = 1000
 
@@ -177,6 +178,21 @@ function computesuvvolume(inputvolume, suvscalefactor, suffix)
     return outpath
 end
 
+function computesuvrvolume(inputvolume, suvscalefactor, suffix, templatedir, referenceregionfn, σ=2.97)
+    gausskern = KernelFactors.gaussian((σ, σ, σ))
+    #smoothedmasked = imfilter(maskedsuvimg, gausskern, NA())
+    #finalsmoothed = (smoothedmasked .* masknii)
+    pet = niread(inputvolume)
+    _referenceregionmask = niread(joinpath(templatedir, referenceregionfn))
+    outpath = joinpath(dirname(inputvolume), replace(basename(inputvolume), suffix))
+    smoothedvol = imfilter(pet, gausskern, IFNA())
+    suvimage = smoothedvol * suvscalefactor
+    referenceregionmask = (voxel -> voxel == 1.0 ? voxel : missing).(vox(_referenceregionmask, :, :, :))
+    suvreferenceregionmean = occursin("rpons_vermis", referenceregionfn) ? (@chain (suvimage .* referenceregionmask) skipmissing collect partialsort(_, 1:(length(_)÷2), rev=true) mean) : (@chain (suvimage .* referenceregionmask) skipmissing collect mean)
+    niwrite(outpath, NIVolume(pet.header, pet.extensions, suvimage./suvreferenceregionmean))
+    return outpath
+end
+
 function setsformqform(inputvolume)
     nii = niread(inputvolume)
     if nii.header.sform_code != 4 || nii.header.qform_code != 4
@@ -289,20 +305,100 @@ function rigidregistration(fixedvolumepath, movingvolumepath, outdir)
     return joinpath(out_dir, finalmovingvolumepath)   this is bugged here
 end
 =#
+py"""
 
-function rigidregistration(fixedvolumepath, movingvolumepath, outdir, suffix, progressive=false)
+import SimpleITK as sitk
+
+
+def register(
+    fixed_image_path, moving_image_path, final_moving_image, final_transform_path
+):
+    fixed_image = sitk.ReadImage(fixed_image_path, sitk.sitkFloat32)
+    moving_image = sitk.ReadImage(moving_image_path, sitk.sitkFloat32)
+
+    initial_transform = sitk.CenteredTransformInitializer(
+        fixed_image,
+        moving_image,
+        sitk.AffineTransform(3),
+        sitk.CenteredTransformInitializerFilter.GEOMETRY,
+    )
+    registration_method = sitk.ImageRegistrationMethod()
+
+    # Similarity metric settings.
+    registration_method.SetMetricAsMattesMutualInformation(numberOfHistogramBins=50)
+    registration_method.SetMetricSamplingStrategy(registration_method.RANDOM)
+    registration_method.SetMetricSamplingPercentage(0.01)
+
+    registration_method.SetInterpolator(sitk.sitkLinear)
+
+    # Optimizer settings.
+    registration_method.SetOptimizerAsGradientDescent(
+        learningRate=1.0,
+        numberOfIterations=500,
+        convergenceMinimumValue=1e-6,
+        convergenceWindowSize=10,
+    )
+    registration_method.SetOptimizerScalesFromPhysicalShift()
+
+    # Setup for the multi-resolution framework.
+    registration_method.SetShrinkFactorsPerLevel(shrinkFactors=[4, 2, 1])
+    registration_method.SetSmoothingSigmasPerLevel(smoothingSigmas=[2, 1, 0])
+    registration_method.SmoothingSigmasAreSpecifiedInPhysicalUnitsOn()
+
+    registration_method.SetInitialTransform(initial_transform)
+
+    final_transform = registration_method.Execute(
+        sitk.Cast(fixed_image, sitk.sitkFloat32),
+        sitk.Cast(moving_image, sitk.sitkFloat32),
+    )
+    if final_transform_path != None:
+        sitk.WriteTransform(final_transform, final_transform_path)
+    resampled_moving = sitk.Resample(
+        moving_image,
+        fixed_image,
+        final_transform,
+        sitk.sitkLinear,
+        0.0,
+        moving_image.GetPixelID(),
+    )
+
+    sitk.WriteImage(resampled_moving, final_moving_image)
+
+
+def resample_moving(
+    fixed_image_path, moving_image_path, final_moving_image, resample_with_transform
+):
+    fixed_image = sitk.ReadImage(fixed_image_path, sitk.sitkFloat32)
+    moving_image = sitk.ReadImage(moving_image_path, sitk.sitkFloat32)
+    transform = sitk.ReadTransform(resample_with_transform)
+    # apply transform
+    resampled_moving = sitk.Resample(
+        moving_image,
+        fixed_image,
+        transform,
+        sitk.sitkLinear,
+        0.0,
+        moving_image.GetPixelID(),
+    )
+
+    sitk.WriteImage(resampled_moving, final_moving_image)
+
+"""
+function rigidregistration(fixedvolumepath, movingvolumepath, outdir, suffix)
     bn = basename(movingvolumepath)
-    finalmovingvolumepath = replace(bn, suffix)
-    finaltransform = replace(finalmovingvolumepath, "nii.gz" => "affine.txt")
-    outaffinedir = "affine-registration"
-    out_dir = joinpath(outdir, outaffinedir)
-    dipy_align_affine = joinpath(Conda.BINDIR, "dipy_align_affine")
-    cmdstr = `$dipy_align_affine $fixedvolumepath $movingvolumepath --transform "affine" --out_dir $out_dir --out_moved $finalmovingvolumepath --out_affine $finaltransform`
-    if progressive
-        cmdstr = `$cmdstr --progressive`
-    end
-    run(cmdstr)
-    return joinpath(out_dir, finalmovingvolumepath)
+    finalmovingvolumename = replace(bn, suffix)
+    finalmovingvolumepath = joinpath(outdir, finalmovingvolumename)
+    # finaltransform = replace(finalmovingvolumepath, "nii.gz" => "affine.txt")
+    #outaffinedir = "affine-registration"
+    #out_dir = joinpath(outdir, outaffinedir)
+    #dipy_align_affine = joinpath(Conda.BINDIR, "dipy_align_affine")
+    #cmdstr = `$dipy_align_affine $fixedvolumepath $movingvolumepath --transform "affine" --out_dir $out_dir --out_moved $finalmovingvolumepath --out_affine $finaltransform`
+    #if progressive
+    #    cmdstr = `$cmdstr --progressive`
+    #end
+    #run(cmdstr)
+    py"register"(fixedvolumepath, movingvolumepath, finalmovingvolumepath, PyObject(nothing))
+    return finalmovingvolumepath
 end
 
 """
