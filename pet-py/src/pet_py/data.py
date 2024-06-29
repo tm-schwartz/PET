@@ -2,8 +2,11 @@ import json
 import re
 import shutil
 import subprocess
+import zipfile
+from functools import partial
 from itertools import starmap
 from pathlib import Path, os
+from warnings import warn
 
 import pydicom as pydcm
 from deepbet import run_bet
@@ -11,7 +14,7 @@ from more_itertools import consume
 from nipype.interfaces.dcm2nii import Dcm2niix
 from nipype.interfaces.fsl.utils import RobustFOV
 
-from pet_py.util import to_path
+from pet_py.util import check_for_keys_present, get_sequence_dict, to_path
 
 
 def copy_data(source: str | Path, dest: Path):
@@ -23,8 +26,7 @@ def copy_data(source: str | Path, dest: Path):
 def replc(m: re.Match) -> str:
     if m.group().isspace():
         return "_"
-    else:
-        return ""
+    return ""
 
 
 def format_source_data(data_dir: str | Path) -> Path:
@@ -71,7 +73,7 @@ def format_source_data(data_dir: str | Path) -> Path:
                 source = str(path.resolve())
                 dest = out_dir.joinpath(study_instance_uid, series_data, file_name)
                 file_map.append((source, dest))
-                if (jsn := to_path(".".join([source, "json"]))).is_file():
+                if (jsn := to_path(f"{source}.json")).is_file():
                     file_map.append((jsn, dest.with_suffix(".json")))
     # ready for multithreading
     consume(starmap(copy_data, file_map))
@@ -136,7 +138,7 @@ def _edit_json_sidecar_dcm(sidecar: str | Path, keys_file: Path, dicom: str | Pa
         s.seek(0)
         s.truncate()
         json.dump(sidecar_dict, s, indent=1)
-
+    return
 
 def _edit_json_sidecar(sidecar: str | Path, keys_file: Path, zip_path: str | Path, skip_existing_keys: bool = False):
     keys_to_add = keys_file.read_text().split()
@@ -147,15 +149,14 @@ def _edit_json_sidecar(sidecar: str | Path, keys_file: Path, zip_path: str | Pat
     search_regex = os.path.join(json_zip_path, ".*json")
     mrn = json_zip_path.parts[0]
     search_func = partial(re.match, search_regex)
-    with zipfile.ZipFile(zip_path.joinpath(mrn + ".zip")) as zip_archive:
-        with zip_archive.open(
+    with zipfile.ZipFile(zip_path.joinpath(mrn + ".zip")) as zip_archive, zip_archive.open(
             sorted(
                 filter(search_func, zip_archive.namelist()),
                 key=lambda m: int(m.split("/")[-1].split(".")[-2]),
             )[0]
         ) as jsn_dumped:
-            loaded = json.load(jsn_dumped)
-            update_sidecr = {k: loaded[k] for k in keys_to_add if k in loaded}
+        loaded = json.load(jsn_dumped)
+        update_sidecr = {k: loaded[k] for k in keys_to_add if k in loaded}
     if len(list(update_sidecr.keys())) != nkeys:
         for key in keys_to_add:
             if key not in update_sidecr:
@@ -166,7 +167,7 @@ def _edit_json_sidecar(sidecar: str | Path, keys_file: Path, zip_path: str | Pat
         s.seek(0)
         s.truncate()
         json.dump(sidecar_dict, s, indent=1)
-
+    return
 
 def edit_json_sidecar(
     sidecar: str | Path,
@@ -184,7 +185,8 @@ def edit_json_sidecar(
         dcm = to_path(dicom)
         _edit_json_sidecar_dcm(sidecar, keys_fl, dcm, skip_existing_keys)
     else:
-        raise ("Should not be reached!")
+        shd = "Should not be reached!"
+        raise shd
 
 
 def robustfov(
@@ -253,5 +255,6 @@ def skull_strip_mri_synthstrip(
             check=False,
         )
     else:
-        raise "Need freesurfer_path or singularity_path"
+        missing_path = "Need freesurfer_path or singularity_path"
+        raise missing_path
     return out_file

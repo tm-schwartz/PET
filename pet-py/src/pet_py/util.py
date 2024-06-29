@@ -1,6 +1,8 @@
 import json
 import re
+from itertools import compress
 from pathlib import Path, os
+from warnings import warn
 
 import nibabel as nib
 import pandas as pd
@@ -10,12 +12,12 @@ from fsl.utils.image.resample import resampleToPixdims, resampleToReference
 from nilearn.image import load_img, math_img
 from pydicom import Sequence
 
+MNI = 4
 
 def to_path(p: str | Path) -> Path:
     if not isinstance(p, Path):
         return Path(p)
-    else:
-        return p
+    return p
 
 
 def check_for_keys_present(keys_to_check: list[str], path: str | Path):
@@ -35,9 +37,9 @@ def get_sequence_dict(seq: Sequence):
 
 def set_s_q_form_code(input_volume_path: str | Path):
     nii = nib.load(input_volume_path)
-    if nii.header.get("sform_code") != 4 or nii.header.get("qform_code") != 4:
-        nii.set_sform(nii.affine, code=4)
-        nii.set_qform(nii.affine, code=4)
+    if nii.header.get("sform_code") != MNI or nii.header.get("qform_code") != MNI:
+        nii.set_sform(nii.affine, code=MNI)
+        nii.set_qform(nii.affine, code=MNI)
         nii.to_filename(input_volume_path)
 
 
@@ -47,12 +49,12 @@ def mask_volume(
     out_dir: str,
 ) -> str:
     input_volume_path = to_path(input_volume_path)
-    basename = input_volume.name
+    basename = input_volume_path.name
     final_name = basename.replace(".nii.gz", "_mask_applied.nii.gz")
     final_path = os.path.join(out_dir, final_name)
     input_volume = load_img(input_volume_path)
     mask_vol = load_img(mask_volume_path)
-    masked_volume = math_img("iv * mv", iv=input_path_volume, mv=mask_vol)
+    masked_volume = math_img("iv * mv", iv=input_volume, mv=mask_vol)
     masked_volume.to_filename(final_path)
     return final_path
 
@@ -79,15 +81,15 @@ def resample_to_ref(input_volume: Image, lname: str, reference: str | Path) -> P
 
 def generate_masks(
     ref_img: str | Path,
-    atlases: list[str, str] = [
+    atlases: tuple[str] = (
         "mni",
         "harvardoxford-subcortical",
         "harvardoxford-cortical",
-    ],
+    ),
 ):
     rescanAtlases()
     if not all(_atlases := [not hasAtlas(atlas) for atlas in atlases]):
-        print("Unable to find atlas: ", *compress(atlases, _atlases))
+        warn("Unable to find atlas: ", *compress(atlases, _atlases), stacklevel=1)
     label_atlases = [LabelAtlas(getAtlasDescription(atl), 1.0) for atl in atlases]
     for lat in label_atlases:
         for label in lat.desc.labels:
@@ -98,14 +100,14 @@ def generate_masks(
 def append_to_csv(
     sidecar_path: str | Path,
     csv_path: str | Path,
-    keys_to_add: list[str] = [
+    keys_to_add: tuple[str] = (
         "PatientAge",
         "PatientSex",
         "AccessionNumber",
         "AdditionalPatientHistory",
         "AcquisitionDateTime",
         "ReasonForStudy",
-    ],
+    ),
     missing_val: str = " ",
 ):
     df = pd.read_csv(csv_path)

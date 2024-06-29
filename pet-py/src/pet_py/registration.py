@@ -2,7 +2,7 @@ from pathlib import Path, os
 
 import itk
 
-from .util import set_s_q_form_code, to_path
+from pet_py.util import set_s_q_form_code, to_path
 
 
 def elastix_registration(

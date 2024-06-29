@@ -35,29 +35,29 @@ class TestMods:
 
     def test_rfov(self, tmp_path):
         out_str = pet_py.data.robustfov(input_image_path, tmp_path,("pet_input_img", "croppet_input_img.nii.gz"))
-        assert Path(out_str).is_file() == True
+        assert Path(out_str).is_file()
 
     def test_resample_pix_dim(self, tmp_path):
         input_img = next(input_image_path.parent.glob("*croppet_input_img.nii.gz"))
         out_str = pet_py.util.resample_pix_dims(input_img, tmp_path,("croppet", "pixdim"))
-        assert Path(out_str).is_file() == True
+        assert Path(out_str).is_file()
 
     def test_skull_strip_deepbet(self, tmp_path):
         input_img = str(next(input_image_path.parent.glob("*pixdim_input_img.nii.gz")))
         out_str = pet_py.data.skull_strip_deepbet(input_img, tmp_path, ("pixdim", "stripped-deepbet"), 0.9,-2)
-        assert Path(out_str).is_file() == True
+        assert Path(out_str).is_file()
 
     def test_skull_strip_synthstrip(self, tmp_path):
         input_img = str(next(input_image_path.parent.glob("*pixdim_input_img.nii.gz")))
         out_str = pet_py.data.skull_strip_mri_synthstrip(input_img, tmp_path, ("pixdim", "stripped-synthstrip"))
-        assert Path(out_str).is_file() == True
+        assert Path(out_str).is_file()
 
     def test_registration(self, tmp_path):
         input_img = str(next(input_image_path.parent.glob("*stripped-synthstrip*")))
         reg = pet_py.registration.elastix_registration(
             fixed_volume_path, input_img, tmp_path, ("stripped-synthstrip", "elastix"), param_file
         )
-        assert Path(reg[0]).is_file() == True
+        assert Path(reg[0]).is_file()
 
 
 def test_compute_suv_volumes():
@@ -68,7 +68,9 @@ def test_compute_suv_volumes():
         # Pickle the 'data' dictionary using the highest protocol available.
         pickle.dump(out_data, f, pickle.HIGHEST_PROTOCOL)
 
-    assert Path(out_data.suv_path).is_file() and Path(out_data.suvr_path).is_file() and out_data.reference_region_mean > 0.0
+    assert Path(out_data.suv_path).is_file()
+    assert Path(out_data.suvr_path).is_file()
+    assert out_data.reference_region_mean > 0.0
 
 
 def test_get_roi_suvr_means():
@@ -101,4 +103,4 @@ def test_append_to_csv():
 # def test_resample_to_ref(tmp_path):
 #         input_img = Image(Path().home().joinpath("DATASET-20230414/mnitemplates/original_templates/Composite.nii.gz"))
 #         out_str = pet_py.util.resample_to_ref(input_img, "Composite", fixed_volume_path)
-#         assert Path(out_str).is_file() == True
+#         assert Path(out_str).is_file()
