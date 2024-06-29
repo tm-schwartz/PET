@@ -1,0 +1,91 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pet-py"
+dynamic = ["version"]
+description = ''
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+keywords = []
+authors = [
+  { name = "tm-schwartz", email = "tm.sc@protonmail.com" },
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: Implementation :: CPython",
+  "Programming Language :: Python :: Implementation :: PyPy",
+]
+dependencies = [
+   "nibabel",
+   "nilearn",
+   "pydicom",
+   "pandas",
+   "itk-elastix",
+   "numpy",
+   "deepbet",
+   "fslpy",
+   "nipype",
+   "more-itertools"
+   ]
+
+[project.urls]
+Documentation = "https://github.com/tm-schwartz/pet-py#readme"
+Issues = "https://github.com/tm-schwartz/pet-py/issues"
+Source = "https://github.com/tm-schwartz/pet-py"
+
+[tool.hatch.version]
+path = "src/pet_py/__about__.py"
+
+[tool.hatch.envs.types]
+extra-dependencies = [
+  "mypy>=1.0.0",
+]
+[tool.hatch.envs.types.scripts]
+check = "mypy --install-types --non-interactive {args:src/pet_py tests}"
+
+[tool.coverage.run]
+source_pkgs = ["pet_py", "tests"]
+branch = true
+parallel = true
+omit = [
+  "src/pet_py/__about__.py",
+]
+
+[tool.coverage.paths]
+pet_py = ["src/pet_py", "*/pet-py/src/pet_py"]
+tests = ["tests", "*/pet-py/tests"]
+
+[tool.coverage.report]
+exclude_lines = [
+  "no cov",
+  "if __name__ == .__main__.:",
+  "if TYPE_CHECKING:",
+]
+
+[tool.hatch.envs.hatch-test]
+default-args = ["tests"]
+dependencies = [
+  "pytest",
+  "pytest-cov",
+  "pytest-watcher"
+]
+
+# [tool.hatch.envs.test.scripts]
+# test = "pytest tests/test_one.py::import_test"
+# test-cov = "coverage run -m pytest {args:tests}"
+# cov-report = [
+#   "- coverage combine",
+#   "coverage report",
+# ]
+# cov = [
+#   "test-cov",
+#   "cov-report",
+#   "test"
+# ]
+[[tool.hatch.envs.hatch-test.matrix]]
+ python = ["3.10"]
