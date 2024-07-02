@@ -82,8 +82,17 @@ def format_source_data(data_dir: str | Path) -> Path:
 
 def dcm2niix(series_path: str | Path):
     series_path = to_path(series_path)
-    modality = series_path.name.split("_")[-1]
-    folder = series_path.name.removesuffix(f"_{modality}")
+    folder = series_path.name
+    with pydcm.dcmread(next(series_path.glob("*.dcm")), defer_size="1k") as dcm:
+           modality = dcm.get("Modality", "NONE")
+    if series_path.name.count(modality) > 1:
+       folder = series_path.name.split('_')
+       folder.reverse()
+       i = folder.index(modality)
+       _ = folder.pop(i)
+       folder.reverse()
+       folder = "_".join(folder)
+
     converter = Dcm2niix()
     converter.inputs.source_dir = str(series_path)
     converter.inputs.output_dir = str(series_path)
@@ -103,6 +112,8 @@ def to_bids(file_path: str | Path, out_dir: str | Path):
     subdir.mkdir(parents=True, exist_ok=True)
     dest = subdir.joinpath(file_path.name)
     shutil.move(file_path, dest, copy_function=shutil.copyfile)
+    if (jsn := file_path.parent.joinpath(file_path.name.replace("nii.gz", "json"))).is_file():
+        shutil.move(jsn, subdir.joinpath(jsn.name), copy_function=shutil.copyfile)
 
 
 def generate_json_zip_path(path: str | Path) -> Path:

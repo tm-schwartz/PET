@@ -114,7 +114,11 @@ def append_to_csv(
     with open(sidecar_path) as s:
         jsn = json.load(s)
         for key in keys_to_add:
-            df[key] = jsn.get(key, missing_val)
+            rfs = jsn.get(key, missing_val)
+            if key in ("ReasonForStudy", "AdditionalPatientHistory",):
+                rfs = re.sub(r"[^\w\s.,]|\n|\t", "", rfs).strip()
+            df[key] = rfs
+
     if "PatientAge" in keys_to_add and len(df[df.PatientAge == missing_val]):
         df["PatientAge"] = (pd.to_datetime(jsn.get("AcquisitionDateTime"))-pd.to_datetime(jsn.get("PatientBirthDate"))).to_timedelta64().astype('timedelta64[Y]').item()
     df.to_csv(csv_path, index=False)
