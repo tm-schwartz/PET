@@ -219,3 +219,11 @@ data/head_crop.nii
 data/stripperd-11603453_20181210121725-body_pet_axial_derived_primary_reformatted.nii.gz
 data/sub-11603453_sdit-BODY_PET_AXIAL_DERIVED_PRIMARY_REFORMATTED_vumcct_ac-56800273_dt-20181210121725_pet.nii.gz
 PetProcessing/src/.JuliaFormatter.toml
+**/PetProcessing/fdgvenv/*
+PetProcessing-img.so
+fdgpet_testrun.slurm
+PetProcessing/Copy of koran_all_memory_data_UPDATE_20240112.xlsx
+voxelwise/RI/getspmstats.m
+voxelwise/RI/chunk4dnifti_slurm.sh
+voxelwise/RI/chunk4dnifti.R
+voxelwise/RI/chunkproc_novwreg.R
