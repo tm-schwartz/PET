@@ -21,7 +21,10 @@ def elastix_registration(
     fixed_image = itk.imread(fixed_volume_path, itk.F)
     moving_image = itk.imread(moving_volume_path, itk.F)
     parameter_object = itk.ParameterObject.New()
-    pms = [parameter_object.GetDefaultParameterMap(pm, 3) for pm in ["translation", "rigid", "affine"]]
+    pms = [
+        parameter_object.GetDefaultParameterMap(pm, 3)
+        for pm in ["translation", "rigid", "affine"]
+    ]
     parameter_object.AddParameterMap(pms[0])
     parameter_object.AddParameterMap(pms[1])
     parameter_object.AddParameterMap(pms[2])
@@ -39,7 +42,9 @@ def elastix_registration(
         log_to_console=False,
     )
 
-    result_image = itk.transformix_filter(moving_image, transform_parameter_object=result_transform_parameters)
+    result_image = itk.transformix_filter(
+        moving_image, transform_parameter_object=result_transform_parameters
+    )
     itk.imwrite(result_image, out_file)
     set_s_q_form_code(out_file)
     return (

@@ -14,6 +14,7 @@ from pydicom import Sequence
 
 MNI = 4
 
+
 def to_path(p: str | Path) -> Path:
     if not isinstance(p, Path):
         return Path(p)
@@ -30,7 +31,9 @@ def check_for_keys_present(keys_to_check: list[str], path: str | Path):
 
 def get_sequence_dict(seq: Sequence):
     return {
-        x.name.replace(" ", ""): (x.value if not isinstance(x.value, Sequence) else get_sequence_dict(x.value))
+        x.name.replace(" ", ""): (
+            x.value if not isinstance(x.value, Sequence) else get_sequence_dict(x.value)
+        )
         for x in seq[0].elements()
     }
 
@@ -59,7 +62,9 @@ def mask_volume(
     return final_path
 
 
-def resample_pix_dims(input_volume_path: str | Path, out_dir: str, suffix: tuple) -> str:
+def resample_pix_dims(
+    input_volume_path: str | Path, out_dir: str, suffix: tuple
+) -> str:
     input_volume_path = to_path(input_volume_path)
     input_image = Image(input_volume_path)
     resampled_data = resampleToPixdims(input_image, [1, 1, 1])
@@ -115,12 +120,23 @@ def append_to_csv(
         jsn = json.load(s)
         for key in keys_to_add:
             rfs = jsn.get(key, missing_val)
-            if key in ("ReasonForStudy", "AdditionalPatientHistory",):
+            if key in (
+                "ReasonForStudy",
+                "AdditionalPatientHistory",
+            ):
                 rfs = re.sub(r"[^\w\s.,]|\n|\t", "", rfs).strip()
             df[key] = rfs
 
     if "PatientAge" in keys_to_add and len(df[df.PatientAge == missing_val]):
-        df["PatientAge"] = (pd.to_datetime(jsn.get("AcquisitionDateTime"))-pd.to_datetime(jsn.get("PatientBirthDate"))).to_timedelta64().astype('timedelta64[Y]').item()
+        df["PatientAge"] = (
+            (
+                pd.to_datetime(jsn.get("AcquisitionDateTime"))
+                - pd.to_datetime(jsn.get("PatientBirthDate"))
+            )
+            .to_timedelta64()
+            .astype("timedelta64[Y]")
+            .item()
+        )
     df.to_csv(csv_path, index=False)
 
 
