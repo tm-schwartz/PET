@@ -9,12 +9,12 @@ def elastix_registration(
     fixed_volume_path: str,
     moving_volume_path: str | Path,
     out_dir: str,
-    suffix: tuple[str, str] | list[str, str],
+    suffix:  None | tuple[str, str] | list[str, str] = None,
     param_file: str | None = None,
-) -> tuple[str, itk.ParameterObject]:
+): # -> tuple[str, itk.ParameterObject]:   TODO: this type annotation causes error w/ missing libtbb.so.12
     moving_volume_path = to_path(moving_volume_path)
     basename = moving_volume_path.name
-    out_file = os.path.join(out_dir, basename.replace(*suffix))
+    out_file = os.path.join(out_dir, basename.replace(*suffix) if suffix else "reg_final.nii.gz")
     itk_meta_dir = Path(out_dir).joinpath(out_file.replace(".nii.gz", "-elastix_data"))
     if not itk_meta_dir.exists():
         itk_meta_dir.mkdir()

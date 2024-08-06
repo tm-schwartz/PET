@@ -9,6 +9,7 @@ from pathlib import Path, os
 from warnings import warn
 
 import pydicom as pydcm
+# from pydicom.misc import is_dicom
 from deepbet import run_bet
 from more_itertools import consume
 from nipype.interfaces.dcm2nii import Dcm2niix
@@ -90,10 +91,11 @@ def format_source_data(data_dir: str | Path) -> Path:
     return out_dir
 
 
-def dcm2niix(series_path: str | Path):
+def dcm2niix(series_path: str | Path, deriv: bool = False):
     series_path = to_path(series_path)
     folder = series_path.name
-    with pydcm.dcmread(next(series_path.glob("*.dcm")), defer_size="1 KB") as dcm:
+    dcm_path = next(filter(pydcm.misc.is_dicom, series_path.glob("*")))
+    with pydcm.dcmread(dcm_path, defer_size="1 KB") as dcm:
         modality = dcm.get("Modality", "NONE")
     if series_path.name.count(modality) > 1:
         folder = series_path.name.split("_")
@@ -107,7 +109,7 @@ def dcm2niix(series_path: str | Path):
     converter.inputs.source_dir = str(series_path)
     converter.inputs.output_dir = str(series_path)
     converter.inputs.compression = 9
-    converter.inputs.ignore_deriv = True
+    converter.inputs.ignore_deriv = deriv
     converter.inputs.merge_imgs = True
     converter.inputs.anon_bids = False
     converter.inputs.out_filename = f"sub-%i_sdit-{folder}_ac-%g_dt-%t_{modality}"
@@ -237,11 +239,11 @@ def robustfov(
     input_volume: str | Path,
     out_dir: str,
     brain_size: int = 170,
-    suffix: tuple[str, str] | list[str, str] = ("pet", "cropped_pet"),
+    suffix: None | tuple[str, str] | list[str, str] = None,
 ) -> str:
     input_volume = to_path(input_volume)
     basename = input_volume.name
-    out_file = os.path.join(out_dir, basename.replace(*suffix))
+    out_file = os.path.join(out_dir, basename.replace(*suffix) if suffix else "robustfov.nii.gz")
     out_transform = out_file.replace("nii.gz", "tfm.txt")
     if "hn" in basename.lower():
         shutil.copy(input_volume, out_file)
@@ -259,13 +261,13 @@ def robustfov(
 def skull_strip_deepbet(
     input_volume_path: str | Path,
     out_dir: str,
-    suffix: tuple[str, str] | list[str, str],
+    suffix: None | tuple[str, str] | list[str, str] = None,
     threshold: float = 0.9,
     dilation: int = -2,
 ) -> str:
     input_volume_path = to_path(input_volume_path)
     basename = input_volume_path.name
-    out_file = os.path.join(out_dir, basename.replace(*suffix))
+    out_file = os.path.join(out_dir, basename.replace(*suffix) if suffix else "deepbet.nii.gz")
     tiv_path = out_file.replace("nii.gz", "TIV.csv")
     run_bet(
         [str(input_volume_path)],
@@ -281,13 +283,13 @@ def skull_strip_deepbet(
 def skull_strip_mri_synthstrip(
     input_volume_path: str | Path,
     out_dir: str,
-    suffix: tuple[str, str] | list[str, str],
+    suffix:  None | tuple[str, str] | list[str, str] = None,
     freesurfer_path: str = os.environ.get("FREESURFER_HOME"),
     singularity_path: str | None = None,
 ) -> str:
     input_volume_path = to_path(input_volume_path)
     basename = input_volume_path.name
-    out_file = os.path.join(out_dir, basename.replace(*suffix))
+    out_file = os.path.join(out_dir, basename.replace(*suffix) if suffix else "synthstrip.nii.gz")
     if singularity_path:
         subprocess.run(
             f"singularity exec {singularity_path} mri_synthstrip -i {input_volume_path!s} -o {out_file}",
