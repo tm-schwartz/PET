@@ -17,6 +17,9 @@ pet-fdg <command> [args...]
         Regenerate the atlas ROI *-mask.nii.gz set + smooth/stripped fixed
         images into the (writable) templates dir.
 
+  batch <bids_root> [--pattern GLOB] [-n N]
+        Run one series per subject; writes /output/batch_summary.csv.
+
   info
         Print tool versions (FSL, elastix, deepbet, python).
 
@@ -34,6 +37,10 @@ case "${1:-}" in
   masks)
     shift
     exec python /opt/src/container/make_templates.py "$@"
+    ;;
+  batch)
+    shift
+    exec python /opt/src/container/batch_run.py "$@"
     ;;
   info)
     python - <<'PY'

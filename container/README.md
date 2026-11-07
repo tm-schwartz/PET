@@ -48,7 +48,9 @@ LONI IDA "UC Berkeley – FDG MetaROI NPDKA Analysis" or reconstruct.
 
 - `pet-fdg info` — version report
 - `pet-fdg run <data_path> [--nifti_path|--zip_file ...]` — pipeline (tests/run.py)
-- `pet-fdg masks <template.nii> [--outdir]` — provision templates
+- `pet-fdg masks <template.nii> [--outdir] [--placeholder-ponsvermis]` — provision templates
+- `pet-fdg batch <bids_root> [--pattern GLOB] [-n N]` — one series per subject
+  into `/output/batch_summary.csv` (status per subject; failures never fatal)
 - `pet-fdg shell` — debugging
 
 ## Notes

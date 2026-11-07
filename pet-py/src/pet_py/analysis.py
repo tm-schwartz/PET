@@ -77,6 +77,13 @@ def compute_suv_volumes(
                 "suvimg * rr_mask", suvimg=suv_image, rr_mask=reference_region_mask
             ).get_fdata()
         )
+    if not np.isfinite(suv_reference_region_mean) or suv_reference_region_mean <= 0:
+        msg = (
+            f"Reference region mean SUV is {suv_reference_region_mean} for "
+            f"{input_volume_path} - empty/misaligned reference mask or "
+            "crop without brain; refusing to emit inf SUVRs"
+        )
+        raise ValueError(msg)
     out_path_suvr_image = input_volume_path.parents[0].joinpath(
         input_volume_path.name.replace(".nii.gz", "-SUVR.nii.gz")
     )

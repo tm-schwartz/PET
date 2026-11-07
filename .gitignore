@@ -1,2 +1,4 @@
 
 *.nii
+__pycache__/
+*.pyc
