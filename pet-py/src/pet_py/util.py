@@ -93,8 +93,8 @@ def generate_masks(
     ),
 ):
     rescanAtlases()
-    if not all(_atlases := [not hasAtlas(atlas) for atlas in atlases]):
-        warn("Unable to find atlas: ", *compress(atlases, _atlases), stacklevel=1)
+    if any(_atlases := [not hasAtlas(atlas) for atlas in atlases]):
+        warn(f"Unable to find atlas: {tuple(compress(atlases, _atlases))}", stacklevel=1)
     label_atlases = [LabelAtlas(getAtlasDescription(atl), 1.0) for atl in atlases]
     for lat in label_atlases:
         for label in lat.desc.labels:

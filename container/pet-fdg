@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+# pet-fdg — driver for the pet_py FDG SUVR pipeline inside the container.
+set -euo pipefail
+
+RUN=/opt/src/pet-py/tests/run.py
+
+usage() {
+  cat <<'EOF'
+pet-fdg <command> [args...]
+
+  run <data_path> [--nifti_path X --zip_file Z]
+        Execute the pipeline (see tests/run.py). --template_dir/--param_file
+        default to $TEMPLATE_DIR (/templates) and $PARAM_FILE
+        (/templates/param27.txt); override on the command line.
+
+  masks <reference_nii> [--outdir DIR]
+        Regenerate the atlas ROI *-mask.nii.gz set + smooth/stripped fixed
+        images into the (writable) templates dir.
+
+  info
+        Print tool versions (FSL, elastix, deepbet, python).
+
+  shell [cmd...]
+        Drop into bash (or run cmd) in the container environment.
+EOF
+}
+
+case "${1:-}" in
+  run)
+    shift
+    exec python "$RUN" --template_dir "${TEMPLATE_DIR:-/templates}" \
+                       --param_file "${PARAM_FILE:-/templates/param27.txt}" "$@"
+    ;;
+  masks)
+    shift
+    exec python /opt/src/container/make_templates.py "$@"
+    ;;
+  info)
+    python - <<'PY'
+import itk, nibabel, nilearn, nipype, pydicom, torch, sys
+from importlib.metadata import version
+print("python   ", sys.version.split()[0])
+print("itk      ", itk.__version__)
+print("nibabel  ", nibabel.__version__)
+print("nilearn  ", nilearn.__version__)
+print("nipype   ", nipype.__version__)
+print("pydicom  ", pydicom.__version__)
+print("fslpy    ", version("fslpy"))
+print("deepbet  ", version("deepbet"))
+print("torch    ", torch.__version__)
+PY
+    robustfov -help 2>&1 | head -1
+    cat "$FSLDIR/fslversion" 2>/dev/null || true
+    ;;
+  shell)
+    shift || true
+    exec bash "$@"
+    ;;
+  ""|--help|-h)
+    usage
+    ;;
+  *)
+    usage
+    exit 2
+    ;;
+esac

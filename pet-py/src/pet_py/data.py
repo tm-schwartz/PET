@@ -8,6 +8,8 @@ from itertools import starmap
 from pathlib import Path, os
 from warnings import warn
 
+import nibabel as nib
+import numpy as np
 import pydicom as pydcm
 # from pydicom.misc import is_dicom
 from deepbet import run_bet
@@ -235,6 +237,47 @@ def edit_json_sidecar(
         raise shd
 
 
+PROBE_SLICES = 30
+"""Slices in from each z-end used to locate the vertex in whole-body data."""
+
+
+def ensure_vertex_at_high_k(input_volume: str | Path, out_dir: str) -> Path:
+    """Return a volume whose high-k z end is the head, for robustfov.
+
+    robustfov searches downward from the LAST z slice (FSL's own volumes are
+    stored vertex-at-high-k). Whole-body series stored feet-first, or in
+    scanner-bore axes (common on imported GE data), silently break this and
+    the crop lands on the legs. The head end is identified by how much tissue
+    cross-section is present near the end: 30 slices in from the vertex is
+    skull base/neck (wide), from the toes it is still thin leg.
+    Ambiguity resolves to no-flip, preserving FSL's original behavior.
+    """
+    img = nib.load(str(input_volume))
+    vox = np.asanyarray(img.dataobj)
+    area = (vox > 0).sum(axis=(0, 1)).astype("float64")
+    n = len(area)
+    probe = min(PROBE_SLICES, n - 1)
+    head_high = area[n - 1 - probe] >= area[probe]
+    if head_high:
+        return to_path(input_volume)
+    flipped = nib.Nifti1Image(
+        np.flip(vox, axis=2), _flip_affine_z(img.affine, vox.shape[2])
+    )
+    dest = to_path(out_dir).joinpath(
+        to_path(input_volume).name.replace(".nii.gz", "_headfirst.nii.gz")
+    )
+    flipped.to_filename(dest)
+    return dest
+
+
+def _flip_affine_z(affine: np.ndarray, n_slices: int) -> np.ndarray:
+    """Affine for data flipped along voxel axis 2 (same world coordinates)."""
+    aff = affine.copy()
+    aff[:, 3] += (n_slices - 1) * aff[:, 2]
+    aff[:, 2] *= -1
+    return aff
+
+
 def robustfov(
     input_volume: str | Path,
     out_dir: str,
@@ -247,14 +290,19 @@ def robustfov(
     out_transform = out_file.replace("nii.gz", "tfm.txt")
     if "hn" in basename.lower():
         shutil.copy(input_volume, out_file)
-    else:
+        return out_file
+    source = ensure_vertex_at_high_k(input_volume, out_dir)
+    try:
         robustfov_obj = RobustFOV()
-        robustfov_obj.inputs.in_file = str(input_volume)
+        robustfov_obj.inputs.in_file = str(source)
         robustfov_obj.inputs.out_roi = out_file
         robustfov_obj.inputs.brainsize = brain_size
         robustfov_obj.inputs.out_transform = out_transform
         robustfov_obj.inputs.output_type = "NIFTI_GZ"
         robustfov_obj.run()
+    finally:
+        if source != input_volume:
+            source.unlink(missing_ok=True)
     return out_file
 
 

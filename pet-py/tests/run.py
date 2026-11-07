@@ -107,7 +107,9 @@ def runner(
     derivatives.mkdir(parents=True, exist_ok=True)
     sidecar = str(nifti_path).replace("nii.gz", "json")
 
-    robfov_out = pet_py.data.robustfov(nifti_path, derivatives, 300, ("PT", "cropped_pet"))
+    # brainsize 170 matches the Julia runSUV default; 300 shifts the
+    # crop center into the body and breaks geometry-initialized registration
+    robfov_out = pet_py.data.robustfov(nifti_path, derivatives, 170, ("PT", "cropped_pet"))
     pixdim = pet_py.util.resample_pix_dims(
         robfov_out, derivatives, ("cropped_pet", "pixdim")
     )
