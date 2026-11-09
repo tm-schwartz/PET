@@ -32,7 +32,7 @@ RUN curl -LsSf https://astral.sh/uv/0.7.8/install.sh | env UV_INSTALL_DIR=/usr/l
 ENV UV_PYTHON_INSTALL_DIR=/opt/python
 
 COPY pet-py /opt/src/pet-py
-COPY container/make_templates.py container/batch_run.py /opt/src/container/
+COPY container/make_templates.py container/batch_run.py container/build_ponsvermis.py /opt/src/container/
 
 RUN uv venv --python 3.11 /opt/venv \
     && uv pip install --python /opt/venv/bin/python --torch-backend=cpu \

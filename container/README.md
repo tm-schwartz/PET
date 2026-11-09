@@ -40,9 +40,45 @@ docker run --rm -v $TEMPLATES:/templates -v $DIR_WITH_NII:/seed:ro \
 
 Produces: smoothed + stripped fixed images, all `*-mask.nii.gz` ROI masks
 (MNI structural + Harvard-Oxford via fslpy atlases), `param27.txt`.
-Still missing (not reproducible from public data): the hand-drawn
-`ponsvermis_1mm_bin-mask.nii.gz` / `Composite-mask.nii.gz` — obtain from
-LONI IDA "UC Berkeley – FDG MetaROI NPDKA Analysis" or reconstruct.
+
+## ponsvermis reference mask
+
+The legacy `ponsvermis_1mm_bin` mask (FastSurfer cerebnet + pons, manually
+created) has no surviving output on storage, so we reconstruct it from public
+atlases onto the Darkner fixed-image grid (`build_ponsvermis.py` pattern):
+
+- **pons** = NextBrain histological MNI152 1mm atlas labels 580/10580
+  (Casamitjana et al., *Nature* 2025, doi:10.1038/s41586-025-09708-2);
+  11.8 cc, midline centroid (0, -24, -32).
+- **vermis** = Diedrichsen/SUIT 2009 probabilistic cerebellar atlas
+  (doi:10.1016/j.neuroimage.2009.01.045) deterministic MNI labels
+  6,9,12,15,18,21,24,27 (Vermis VI/CrusI/CrusII/VIIb/VIIIa/VIIIb/IX/X);
+  7.2 cc, centroid (0, -66, -31); zero overlap with pons (4th ventricle
+  between — anatomically correct).
+
+Citation-verified caveats (2026-11, full report in
+`/tmp/opencode/ponsvermis_citation_verification.md`):
+
+1. Pons volume is 19-25% below FreeSurfer/FIRST native-space control means
+   (14.5-15.8 cc); plausible for a deterministic template-space label.
+   FreeSurfer's protocol (Iglesias 2015, App. A) includes bounded MCP tissue
+   via a posterior cutoff between MCP/SCP branching points, so NextBrain's
+   MCP-spanning lateral extent (x ± 19 mm) is equivalent-enough — do NOT
+   trim the peduncles.
+2. Vermis is ~40% above the same-family in-vivo benchmark (Bocchetta 2016,
+   label fusion + TIV correction: 5.0 cc); deterministic max-prob labels are
+   inherently more inclusive. Our union is **posterior vermis only** — SUIT
+   places lobules I-IV (largely anterior vermis) in hemispheric labels 1/2,
+   which cerebnet would count as vermal. Optional refinement, not needed for
+   reference-region use.
+
+Composite (MetaROI) mask: pass Berkeley `Composite.nii` with
+`masks --composite`; it is resampled nearest-neighbour onto the fixed grid
+as `Composite-mask.nii.gz`.
+
+Still missing (not reproducible from public data): the exact legacy masks —
+obtain from LONI IDA "UC Berkeley – FDG MetaROI NPDKA Analysis" if the
+reconstruction above must be replaced 1:1.
 
 ## Commands
 

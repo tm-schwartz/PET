@@ -66,6 +66,11 @@ def main() -> None:
     parser.add_argument("--outdir", default="/templates")
     parser.add_argument("--fwhm", type=float, default=6.0, help="smoothing mm")
     parser.add_argument(
+        "--composite",
+        help="Berkeley MetaROIs Composite.nii (2mm MNI152Lin); resampled "
+        "to the fixed-image grid as Composite-mask.nii.gz",
+    )
+    parser.add_argument(
         "--placeholder-ponsvermis",
         action="store_true",
         help="Build a stand-in ponsvermis_1mm_bin-mask.nii.gz from the "
@@ -95,6 +100,12 @@ def main() -> None:
     (outdir / "param27.txt").write_bytes(param.read_bytes())
 
     generate_masks(outdir / SMOOTHED)
+
+    if args.composite:
+        comp = load_img(args.composite)
+        resample_to_img(comp, load_img(outdir / SMOOTHED), interpolation="nearest"
+                        ).to_filename(outdir / "Composite-mask.nii.gz")
+        print("Composite-mask.nii.gz resampled onto fixed grid")
 
     if args.placeholder_ponsvermis:
         placeholder_ponsvermis(outdir)

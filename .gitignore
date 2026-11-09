@@ -2,3 +2,4 @@
 *.nii
 __pycache__/
 *.pyc
+MetaROIs.zip
