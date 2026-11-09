@@ -22,6 +22,7 @@ echo "$series" | wc -l | xargs echo "series to stage:"
 
 mkdir -p /tmp/pet_stage
 echo "$series" | sed "s|$BIDS/||" > /tmp/pet_stage/series.txt
+echo "$series" | sed "s|$BIDS/||; s|\.nii\.gz|.json|" >> /tmp/pet_stage/series.txt
 ssh "$MERLIN" "mkdir -p $REMOTE/bids $REMOTE/out $REMOTE/templates"
 rsync -a --info=progress2 --files-from=/tmp/pet_stage/series.txt \
   "$BIDS/" "$MERLIN:$REMOTE/bids/"
