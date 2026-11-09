@@ -91,7 +91,17 @@ reconstruction above must be replaced 1:1.
 
 ## Notes
 
-- `deepbet` downloads model weights on first use into `$HOME`; set
-  `HOME=/tmp` (or a mounted rw path) when running `--user`.
+- `deepbet` model weights are baked into the image
+  (`/opt/venv/lib/.../site-packages/data/models/*.pt`); no runtime download.
 - FSL is only used for `robustfov` and fslpy resampling; nipype sees it via
   `FSLDIR=/opt/fsl`.
+- Ambiguous-orientation series: `batch --head-at high|low` forces the
+  flip decision. NOTE (sub-10342574 autopsy): this build of robustfov
+  anchors on the first strong cross-section area RISE from either end, so
+  series with a positive reconstruction pedestal plus a focal hot artifact
+  can crop the feet in BOTH orientations. Such series are data-quality
+  rejects until a pedestal-cutoff preprocess lands; check
+  `batch_summary.csv` FAIL rows.
+- Merlin (Slurm): stage with `container/merlin_stage.sh N` from the NFS
+  workspace host, submit `sbatch --array=1-N container/merlin_array.sbatch`
+  on a merlin login node; `/mnt/data` there is node-local, use `/home-nfs`.

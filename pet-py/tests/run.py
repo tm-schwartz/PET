@@ -97,6 +97,7 @@ def runner(
     bids_dir: Path,
     templates: Path,
     param_file: Path,
+    head_at: str | None = None,
 ):
     # todo change from using zip parent in edit_json_data
     derivatives = bids_dir.joinpath(
@@ -109,7 +110,9 @@ def runner(
 
     # brainsize 170 matches the Julia runSUV default; 300 shifts the
     # crop center into the body and breaks geometry-initialized registration
-    robfov_out = pet_py.data.robustfov(nifti_path, derivatives, 170, ("PT", "cropped_pet"))
+    robfov_out = pet_py.data.robustfov(
+        nifti_path, derivatives, 170, ("PT", "cropped_pet"), head_at=head_at
+    )
     pixdim = pet_py.util.resample_pix_dims(
         robfov_out, derivatives, ("cropped_pet", "pixdim")
     )

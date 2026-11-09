@@ -241,7 +241,9 @@ PROBE_SLICES = 30
 """Slices in from each z-end used to locate the vertex in whole-body data."""
 
 
-def ensure_vertex_at_high_k(input_volume: str | Path, out_dir: str) -> Path:
+def ensure_vertex_at_high_k(
+    input_volume: str | Path, out_dir: str, head_at: str | None = None
+) -> Path:
     """Return a volume whose high-k z end is the head, for robustfov.
 
     robustfov searches downward from the LAST z slice (FSL's own volumes are
@@ -251,13 +253,20 @@ def ensure_vertex_at_high_k(input_volume: str | Path, out_dir: str) -> Path:
     cross-section is present near the end: 30 slices in from the vertex is
     skull base/neck (wide), from the toes it is still thin leg.
     Ambiguity resolves to no-flip, preserving FSL's original behavior.
+    head_at="high"|"low" skips the heuristic (manual triage of ambiguous
+    series, e.g. hot artifacts inflating the foot-end tissue probe).
     """
     img = nib.load(str(input_volume))
     vox = np.asanyarray(img.dataobj)
     area = (vox > 0).sum(axis=(0, 1)).astype("float64")
     n = len(area)
     probe = min(PROBE_SLICES, n - 1)
-    head_high = area[n - 1 - probe] >= area[probe]
+    if head_at == "high":
+        head_high = True
+    elif head_at == "low":
+        head_high = False
+    else:
+        head_high = area[n - 1 - probe] >= area[probe]
     if head_high:
         return to_path(input_volume)
     flipped = nib.Nifti1Image(
@@ -283,6 +292,7 @@ def robustfov(
     out_dir: str,
     brain_size: int = 170,
     suffix: None | tuple[str, str] | list[str, str] = None,
+    head_at: str | None = None,
 ) -> str:
     input_volume = to_path(input_volume)
     basename = input_volume.name
@@ -291,7 +301,7 @@ def robustfov(
     if "hn" in basename.lower():
         shutil.copy(input_volume, out_file)
         return out_file
-    source = ensure_vertex_at_high_k(input_volume, out_dir)
+    source = ensure_vertex_at_high_k(input_volume, out_dir, head_at=head_at)
     try:
         robustfov_obj = RobustFOV()
         robustfov_obj.inputs.in_file = str(source)

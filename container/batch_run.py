@@ -41,12 +41,27 @@ def main() -> None:
     ap.add_argument("--pattern", default="*AC*3DWB*PT.nii.gz")
     ap.add_argument("-n", type=int, default=10)
     ap.add_argument("--all-subjects", action="store_true")
+    ap.add_argument(
+        "--line",
+        type=int,
+        help="run only the 1-based K-th selected series (SLURM array task mode)",
+    )
+    ap.add_argument(
+        "--head-at",
+        choices=("high", "low"),
+        help="force the head-end for robustfov on ambiguous-orientation "
+        "series (triage override; default: content heuristic)",
+    )
     ap.add_argument("--work", type=Path, default=Path("/output/batch"))
     ap.add_argument("--templates", type=Path, default=Path("/templates"))
     ap.add_argument("--summary", type=Path, default=Path("/output/batch_summary.csv"))
     args = ap.parse_args()
 
     series = pick_series(args.bids_root, args.pattern, args.n, args.all_subjects)
+    if args.line:
+        if not 1 <= args.line <= len(series):
+            raise SystemExit(f"--line {args.line} outside 1..{len(series)}")
+        series = series[args.line - 1:args.line]
     print(f"{len(series)} series selected", flush=True)
 
     rows = []
@@ -66,7 +81,7 @@ def main() -> None:
                     shutil.copy(src_file, dst)
             js = pet_py.analysis.get_suvbw_scale_factor(stage / src.name.replace(".nii.gz", ".json"))
             runner(stage / src.name, args.work, args.templates,
-                   args.templates / "param27.txt")
+                   args.templates / "param27.txt", head_at=args.head_at)
             row["scale"] = round(js, 6)
             outs = sorted(args.work.glob(f"derivatives/sub-{mrn}/**/*SUVR.csv"))
             row["csv"] = str(outs[-1]) if outs else ""

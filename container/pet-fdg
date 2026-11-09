@@ -17,8 +17,10 @@ pet-fdg <command> [args...]
         Regenerate the atlas ROI *-mask.nii.gz set + smooth/stripped fixed
         images into the (writable) templates dir.
 
-  batch <bids_root> [--pattern GLOB] [-n N]
-        Run one series per subject; writes /output/batch_summary.csv.
+  batch <bids_root> [--pattern GLOB] [-n N] [--line K] [--head-at high|low]
+        Run one series per subject (or just the K-th for array tasks);
+        writes /output/batch_summary.csv. --head-at overrides the content
+        heuristic for ambiguous-orientation series (triage).
 
   info
         Print tool versions (FSL, elastix, deepbet, python).
