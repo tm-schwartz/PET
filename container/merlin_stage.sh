@@ -16,11 +16,13 @@ all=$(
   awk '{ mrn=$0; sub(/.*sub-/,"",mrn); sub(/_.*/,"",mrn);
          if (!(mrn in seen)) { seen[mrn]=1; print } }'
 )
-series=$(printf '%s\n' "$all" | head -n "$N")
+mapfile -t all_arr <<< "$all"
+series=$(printf '%s\n' "${all_arr[@]:0:$N}")
 echo "$series" | wc -l | xargs echo "series to stage:"
 
 mkdir -p /tmp/pet_stage
 echo "$series" | sed "s|$BIDS/||" > /tmp/pet_stage/series.txt
+ssh "$MERLIN" "mkdir -p $REMOTE/bids $REMOTE/out $REMOTE/templates"
 rsync -a --info=progress2 --files-from=/tmp/pet_stage/series.txt \
   "$BIDS/" "$MERLIN:$REMOTE/bids/"
 
