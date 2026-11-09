@@ -10,12 +10,13 @@ MERLIN=${2:-merlin-01}
 BIDS=/nfs/masi/schwat1/bids
 REMOTE=/home-nfs/schwat1/pet-fdg
 
-series=$(
+all=$(
   find "$BIDS" -mindepth 3 -maxdepth 3 -path '*/PT/*' \
        -name '*AC*3DWB*PT.nii.gz' | LC_ALL=C sort |
   awk '{ mrn=$0; sub(/.*sub-/,"",mrn); sub(/_.*/,"",mrn);
-         if (!(mrn in seen)) { seen[mrn]=1; print } }' | head -n "$N"
+         if (!(mrn in seen)) { seen[mrn]=1; print } }'
 )
+series=$(printf '%s\n' "$all" | head -n "$N")
 echo "$series" | wc -l | xargs echo "series to stage:"
 
 mkdir -p /tmp/pet_stage
