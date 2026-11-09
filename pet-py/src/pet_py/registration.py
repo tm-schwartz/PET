@@ -38,7 +38,7 @@ def elastix_registration(
         moving_image,
         output_directory=str(itk_meta_dir),
         parameter_object=parameter_object,
-        # log_file_name="elastix.log")
+        log_file_name="elastix.log",
         log_to_console=False,
     )
 
